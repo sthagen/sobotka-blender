@@ -19,7 +19,32 @@
 
 # A shell script installing/building all needed dependencies to build Blender, for some Linux distributions.
 
-##### Args and Help Handling #####
+# ----------------------------------------------------------------------------
+# Debugging Helpers
+#
+# Use for developing this script (keep first).
+
+# Useful for debugging this script:
+USE_DEBUG_TRAP=${USE_DEBUG_TRAP:-0}
+USE_DEBUG_LOG=${USE_DEBUG_LOG:-0}
+
+# Print the line that exits.
+if [ $USE_DEBUG_TRAP -ne 0 ]; then
+  err_report() {
+    echo "Error on line $1"
+    exit 1
+  }
+  trap 'err_report $LINENO' ERR
+fi
+
+# Noisy, show every line that runs with it's line number.
+if [ $USE_DEBUG_LOG -ne 0 ]; then
+  PS4='\e[0;33m$(printf %4d ${LINENO}):\e\033[0m '
+  set -x
+fi
+
+# ----------------------------------------------------------------------------
+# Args and Help Handling
 
 # Parse command line!
 ARGS=$( \
@@ -305,7 +330,8 @@ ARGUMENTS_INFO="\"COMMAND LINE ARGUMENTS:
     --skip-ffmpeg
         Unconditionally skip FFMpeg installation/building.\""
 
-##### Main Vars #####
+# ----------------------------------------------------------------------------
+# Main Vars
 
 DO_SHOW_DEPS=false
 
@@ -447,7 +473,8 @@ LANG_BACK=$LANG
 LANG=""
 export LANG
 
-##### Generic Helpers #####
+# ----------------------------------------------------------------------------
+# Generic Helpers
 
 BLACK=$(tput setaf 0)
 RED=$(tput setaf 1)
@@ -489,7 +516,8 @@ PRINT() {
   _echo "$@"
 }
 
-##### Args Handling #####
+# ----------------------------------------------------------------------------
+# Args Handling
 
 # Finish parsing the commandline args.
 eval set -- "$ARGS"
@@ -892,7 +920,8 @@ CXXFLAGS_BACK=$CXXFLAGS
 CXXFLAGS="$CXXFLAGS -std=c++11"
 export CXXFLAGS
 
-#### Show Dependencies ####
+# ----------------------------------------------------------------------------
+# Show Dependencies
 
 # Need those to be after we defined versions...
 DEPS_COMMON_INFO="\"COMMON DEPENDENCIES:
@@ -940,9 +969,8 @@ if [ "$DO_SHOW_DEPS" = true ]; then
   exit 0
 fi
 
-
-
-##### Generic Helpers #####
+# ----------------------------------------------------------------------------
+# Generic Helpers
 
 # Check return code of wget for success...
 download() {
@@ -963,6 +991,13 @@ download() {
     ERROR "wget could not find ${sources[@]}, or could not write it to $2, exiting"
     exit 1
   fi
+}
+
+string_trim() {
+    local var="$*"
+    var="${var#"${var%%[![:space:]]*}"}" # Leading.
+    var="${var%"${var##*[![:space:]]}"}" # Trailing.
+    echo -n "$var"
 }
 
 # Return 0 if $1 = $2 (i.e. 1.01.0 = 1.1, but 1.1.1 != 1.1), else 1.
@@ -1061,7 +1096,9 @@ version_match() {
   return $ret
 }
 
-##### Generic compile helpers #####
+# ----------------------------------------------------------------------------
+# Generic compile helpers
+
 prepare_opt() {
   INFO "Ensuring $INST exists and is writable by us"
   if [ ! $SUDO ]; then
@@ -1123,7 +1160,9 @@ run_ldconfig() {
   PRINT ""
 }
 
-#### Build Python ####
+# ----------------------------------------------------------------------------
+# Build Python
+
 _init_python() {
   _src=$SRC/Python-$PYTHON_VERSION
   _git=false
@@ -1192,7 +1231,9 @@ compile_Python() {
   fi
 }
 
-##### Build Numpy #####
+# ----------------------------------------------------------------------------
+# Build Numpy
+
 _init_numpy() {
   _src=$SRC/numpy-$NUMPY_VERSION
   _git=false
@@ -1259,7 +1300,9 @@ compile_Numpy() {
   fi
 }
 
-#### Build Boost ####
+# ----------------------------------------------------------------------------
+# Build Boost
+
 _init_boost() {
   _src=$SRC/boost-$BOOST_VERSION
   _git=false
@@ -1337,7 +1380,9 @@ compile_Boost() {
   run_ldconfig "boost"
 }
 
-#### Build OCIO ####
+# ----------------------------------------------------------------------------
+# Build OCIO
+
 _init_ocio() {
   _src=$SRC/OpenColorIO-$OCIO_VERSION
   if [ "$OCIO_USE_REPO" = true ]; then
@@ -1452,7 +1497,9 @@ compile_OCIO() {
   run_ldconfig "ocio"
 }
 
-#### Build ILMBase ####
+# ----------------------------------------------------------------------------
+# Build ILMBase
+
 _init_ilmbase() {
   _src=$SRC/ILMBase-$ILMBASE_VERSION
   _git=false
@@ -1543,7 +1590,9 @@ compile_ILMBASE() {
   magic_compile_set ilmbase-$ILMBASE_VERSION $ilmbase_magic
 }
 
-#### Build OpenEXR ####
+# ----------------------------------------------------------------------------
+# Build OpenEXR
+
 _init_openexr() {
   _src=$SRC/OpenEXR-$OPENEXR_VERSION
   _git=true
@@ -1663,7 +1712,9 @@ compile_OPENEXR() {
   run_ldconfig "openexr"
 }
 
-#### Build OIIO ####
+# ----------------------------------------------------------------------------
+# Build OIIO
+
 _init_oiio() {
   _src=$SRC/OpenImageIO-$OIIO_VERSION
   _git=true
@@ -1804,7 +1855,9 @@ compile_OIIO() {
   run_ldconfig "oiio"
 }
 
-#### Build LLVM ####
+# ----------------------------------------------------------------------------
+# Build LLVM
+
 _init_llvm() {
   _src=$SRC/LLVM-$LLVM_VERSION
   _src_clang=$SRC/CLANG-$LLVM_VERSION
@@ -1904,7 +1957,9 @@ compile_LLVM() {
   fi
 }
 
-#### Build OSL ####
+# ----------------------------------------------------------------------------
+# Build OSL
+
 _init_osl() {
   _src=$SRC/OpenShadingLanguage-$OSL_VERSION
   _git=true
@@ -2034,7 +2089,9 @@ compile_OSL() {
   run_ldconfig "osl"
 }
 
-#### Build OSD ####
+# ----------------------------------------------------------------------------
+# Build OSD
+
 _init_osd() {
   _src=$SRC/OpenSubdiv-$OSD_VERSION
   _git=true
@@ -2131,7 +2188,9 @@ compile_OSD() {
   run_ldconfig "osd"
 }
 
-#### Build Blosc ####
+# ----------------------------------------------------------------------------
+# Build Blosc
+
 _init_blosc() {
   _src=$SRC/c-blosc-$OPENVDB_BLOSC_VERSION
   _git=false
@@ -2218,7 +2277,9 @@ compile_BLOSC() {
   run_ldconfig "blosc"
 }
 
-#### Build OpenVDB ####
+# ----------------------------------------------------------------------------
+# Build OpenVDB
+
 _init_openvdb() {
   _src=$SRC/openvdb-$OPENVDB_VERSION
   _git=false
@@ -2319,7 +2380,9 @@ compile_OPENVDB() {
   run_ldconfig "openvdb"
 }
 
-#### Build Alembic ####
+# ----------------------------------------------------------------------------
+# Build Alembic
+
 _init_alembic() {
   _src=$SRC/alembic-$ALEMBIC_VERSION
   _git=false
@@ -2412,7 +2475,9 @@ compile_ALEMBIC() {
   run_ldconfig "alembic"
 }
 
-#### Build OpenCOLLADA ####
+# ----------------------------------------------------------------------------
+# Build OpenCOLLADA
+
 _init_opencollada() {
   _src=$SRC/OpenCOLLADA-$OPENCOLLADA_VERSION
   _git=true
@@ -2504,7 +2569,9 @@ compile_OpenCOLLADA() {
   fi
 }
 
-#### Build Embree ####
+# ----------------------------------------------------------------------------
+# Build Embree
+
 _init_embree() {
   _src=$SRC/embree-$EMBREE_VERSION
   _git=true
@@ -2599,7 +2666,9 @@ compile_Embree() {
   fi
 }
 
-#### Build OpenImageDenoise ####
+# ----------------------------------------------------------------------------
+# Build OpenImageDenoise
+
 _init_oidn() {
   _src=$SRC/oidn-$OIDN_VERSION
   _git=true
@@ -2691,7 +2760,9 @@ compile_OIDN() {
   run_ldconfig "oidn"
 }
 
-#### Build FFMPEG ####
+# ----------------------------------------------------------------------------
+# Build FFMPEG
+
 _init_ffmpeg() {
   _src=$SRC/ffmpeg-$FFMPEG_VERSION
   _inst=$INST/ffmpeg-$FFMPEG_VERSION
@@ -2806,7 +2877,9 @@ compile_FFmpeg() {
 }
 
 
-#### Install on DEB-like ####
+# ----------------------------------------------------------------------------
+# Install on DEB-like
+
 get_package_version_DEB() {
     dpkg-query -W -f '${Version}' $1 | sed -r 's/([0-9]+:)?(([0-9]+\.?)+([0-9]+)).*/\2/'
 }
@@ -3341,7 +3414,9 @@ install_DEB() {
 }
 
 
-#### Install on RPM-like ####
+# ----------------------------------------------------------------------------
+# Install on RPM-like
+
 rpm_flavour() {
   if [ -f /etc/redhat-release ]; then
     if [ "`grep '[6-7]\.' /etc/redhat-release`" ]; then
@@ -3936,7 +4011,9 @@ install_RPM() {
 }
 
 
-#### Install on ARCH-like ####
+# ----------------------------------------------------------------------------
+# Install on ARCH-like
+
 get_package_version_ARCH() {
   pacman -Si $1 | grep Version | tail -n 1 | sed -r 's/.*:\s+?(([0-9]+\.?)+).*/\1/'
 }
@@ -4056,7 +4133,7 @@ install_ARCH() {
   fi
 
   if [ "$WITH_JACK" = true ]; then
-    _packages="$_packages jack"
+    _packages="$_packages jack2"
   fi
 
   PRINT ""
@@ -4426,7 +4503,8 @@ install_ARCH() {
 }
 
 
-#### Install on other distro (very limited!) ####
+# ----------------------------------------------------------------------------
+# Install on other distro (very limited!)
 
 install_OTHER() {
   PRINT ""
@@ -4621,7 +4699,8 @@ install_OTHER() {
   fi
 }
 
-#### Printing User Info ####
+# ----------------------------------------------------------------------------
+# Printing User Info
 
 print_info_ffmpeglink_DEB() {
   dpkg -L $_packages | grep -e ".*\/lib[^\/]\+\.so" | gawk '{ printf(nlines ? "'"$_ffmpeg_list_sep"'%s" : "%s", gensub(/.*lib([^\/]+)\.so/, "\\1", "g", $0)); nlines++ }'
@@ -4681,6 +4760,8 @@ print_info_ffmpeglink() {
     _packages="$_packages $OPENJPEG_DEV"
   fi
 
+  _packages="$(string_trim $_packages)"
+
   if [ "$DISTRO" = "DEB" ]; then
     print_info_ffmpeglink_DEB
   elif [ "$DISTRO" = "RPM" ]; then
@@ -4713,7 +4794,7 @@ print_info() {
   _1="-D PYTHON_VERSION=$PYTHON_VERSION_MIN"
   PRINT "  $_1"
   _buildargs="$_buildargs $_1"
-  if [ -d $INST/python-$PYTHON_VERSION_MIN ]; then
+  if [ -d "$INST/python-$PYTHON_VERSION_MIN" ]; then
     _1="-D PYTHON_ROOT_DIR=$INST/python-$PYTHON_VERSION_MIN"
     PRINT "  $_1"
     _buildargs="$_buildargs $_1"
@@ -4889,7 +4970,9 @@ print_info() {
   PRINT "  cmake $_buildargs ."
 }
 
-#### "Main" ####
+# ----------------------------------------------------------------------------
+# "Main"
+
 # Detect distribution type used on this machine
 if [ -f /etc/debian_version ]; then
   DISTRO="DEB"
