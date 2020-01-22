@@ -993,22 +993,25 @@ download() {
   fi
 }
 
-string_trim() {
-    local var="$*"
-    var="${var#"${var%%[![:space:]]*}"}" # Leading.
-    var="${var%"${var##*[![:space:]]}"}" # Trailing.
-    echo -n "$var"
+version_sanitize() {
+  # Remove suffix such as '1.3_RC2', keeping only '1.3'.
+  # Needed for numeric comparisons.
+  local val=$(sed -r 's/^([^_]+).*/\1/' <<< "$1")
+  # Remove trailing punctuation such as '1.0.', keeping only '1.0'.
+  val=$(sed -r 's/[[:punct:]]*$//g' <<< "$val")
+  echo $val
 }
 
 # Return 0 if $1 = $2 (i.e. 1.01.0 = 1.1, but 1.1.1 != 1.1), else 1.
 # $1 and $2 should be version numbers made of numbers only.
 version_eq() {
-  backIFS=$IFS
-  IFS='.'
+  local VER_1=$(version_sanitize "$1")
+  local VER_2=$(version_sanitize "$2")
+  local IFS='.'
 
   # Split both version numbers into their numeric elements.
-  arr1=( $1 )
-  arr2=( $2 )
+  arr1=( $VER_1 )
+  arr2=( $VER_2 )
 
   ret=1
 
@@ -1018,8 +1021,8 @@ version_eq() {
     _t=$count1
     count1=$count2
     count2=$_t
-    arr1=( $2 )
-    arr2=( $1 )
+    arr1=( $VER_2 )
+    arr2=( $VER_1 )
   fi
 
   ret=0
@@ -1039,7 +1042,6 @@ version_eq() {
     fi
   done
 
-  IFS=$backIFS
   return $ret
 }
 
@@ -1070,12 +1072,13 @@ version_ge_lt() {
 # $1 and $2 should be version numbers made of numbers only.
 # $1 should be at least as long as $2!
 version_match() {
-  backIFS=$IFS
-  IFS='.'
+  local VER_1=$(version_sanitize "$1")
+  local VER_2=$(version_sanitize "$2")
+  local IFS='.'
 
   # Split both version numbers into their numeric elements.
-  arr1=( $1 )
-  arr2=( $2 )
+  arr1=( $VER_1 )
+  arr2=( $VER_2 )
 
   ret=1
 
@@ -1092,7 +1095,6 @@ version_match() {
     done
   fi
 
-  IFS=$backIFS
   return $ret
 }
 
@@ -4759,8 +4761,6 @@ print_info_ffmpeglink() {
   if [ "$OPENJPEG_USE" = true ]; then
     _packages="$_packages $OPENJPEG_DEV"
   fi
-
-  _packages="$(string_trim $_packages)"
 
   if [ "$DISTRO" = "DEB" ]; then
     print_info_ffmpeglink_DEB
