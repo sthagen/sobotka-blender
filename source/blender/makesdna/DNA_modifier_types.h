@@ -703,6 +703,7 @@ typedef struct ArmatureModifierData {
 
 enum {
   MOD_HOOK_UNIFORM_SPACE = (1 << 0),
+  MOD_HOOK_INVERT_VGROUP = (1 << 1),
 };
 
 /* same as WarpModifierFalloff */
@@ -1861,7 +1862,15 @@ typedef struct WeldModifierData {
   unsigned int max_interactions;
   /* Name of vertex group to use to mask, MAX_VGROUP_NAME. */
   char defgrp_name[64];
+
+  short flag;
+  char _pad[6];
 } WeldModifierData;
+
+/* WeldModifierData->flag */
+enum {
+  MOD_WELD_INVERT_VGROUP = (1 << 0),
+};
 
 typedef struct DataTransferModifierData {
   ModifierData modifier;
