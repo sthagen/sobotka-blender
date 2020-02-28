@@ -789,10 +789,11 @@ void clipUVData(TransInfo *t)
 
 /* ********************* ANIMATION EDITORS (GENERAL) ************************* */
 
-/* In modal, `t->center_global` may not have been inited yet. */
+/**
+ * For modal operation: `t->center_global` may not have been set yet.
+ */
 void transform_convert_center_global_v2(TransInfo *t, float r_center[2])
 {
-  /* In modal, `t->center2d` may not have been inited yet. */
   if (t->flag & T_MODAL) {
     UI_view2d_region_to_view(
         (View2D *)t->view, t->mouse.imval[0], t->mouse.imval[1], &r_center[0], &r_center[1]);
@@ -800,6 +801,14 @@ void transform_convert_center_global_v2(TransInfo *t, float r_center[2])
   else {
     copy_v2_v2(r_center, t->center_global);
   }
+}
+
+void transform_convert_center_global_v2_int(TransInfo *t, int r_center[2])
+{
+  float center[2];
+  transform_convert_center_global_v2(t, center);
+  r_center[0] = round_fl_to_int(center[0]);
+  r_center[1] = round_fl_to_int(center[1]);
 }
 
 /* This function tests if a point is on the "mouse" side of the cursor/frame-marking */
@@ -2529,7 +2538,7 @@ void createTransData(bContext *C, TransInfo *t)
     t->obedit_type = -1;
 
     t->num.flag |= NUM_NO_FRACTION; /* sequencer has no use for floating point trasnform */
-    createTransSeqData(C, t);
+    createTransSeqData(t);
     countAndCleanTransDataContainer(t);
   }
   else if (t->spacetype == SPACE_GRAPH) {
