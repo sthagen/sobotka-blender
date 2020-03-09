@@ -214,36 +214,34 @@ void BKE_libblock_free_datablock(ID *id, const int UNUSED(flag))
       BLI_assert(0);
       break;
     case ID_PA:
-      BKE_particlesettings_free((ParticleSettings *)id);
+      BLI_assert(0);
       break;
     case ID_WM:
-      if (free_windowmanager_cb) {
-        free_windowmanager_cb(NULL, (wmWindowManager *)id);
-      }
+      BLI_assert(0);
       break;
     case ID_GD:
       BKE_gpencil_free((bGPdata *)id, true);
       break;
     case ID_MC:
-      BKE_movieclip_free((MovieClip *)id);
+      BLI_assert(0);
       break;
     case ID_MSK:
-      BKE_mask_free((Mask *)id);
+      BLI_assert(0);
       break;
     case ID_LS:
-      BKE_linestyle_free((FreestyleLineStyle *)id);
+      BLI_assert(0);
       break;
     case ID_PAL:
       BKE_palette_free((Palette *)id);
       break;
     case ID_PC:
-      BKE_paint_curve_free((PaintCurve *)id);
+      BLI_assert(0);
       break;
     case ID_CF:
-      BKE_cachefile_free((CacheFile *)id);
+      BLI_assert(0);
       break;
     case ID_WS:
-      BKE_workspace_free((WorkSpace *)id);
+      BLI_assert(0);
       break;
   }
 }

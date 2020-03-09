@@ -533,9 +533,7 @@ bool BKE_lib_id_make_local(Main *bmain, ID *id, const bool test, const int flags
       BLI_assert(0);
       return true;
     case ID_PA:
-      if (!test) {
-        BKE_particlesettings_make_local(bmain, (ParticleSettings *)id, flags);
-      }
+      BLI_assert(0);
       return true;
     case ID_GD:
       if (!test) {
@@ -543,19 +541,13 @@ bool BKE_lib_id_make_local(Main *bmain, ID *id, const bool test, const int flags
       }
       return true;
     case ID_MC:
-      if (!test) {
-        BKE_movieclip_make_local(bmain, (MovieClip *)id, flags);
-      }
+      BLI_assert(0);
       return true;
     case ID_MSK:
-      if (!test) {
-        BKE_mask_make_local(bmain, (Mask *)id, flags);
-      }
+      BLI_assert(0);
       return true;
     case ID_LS:
-      if (!test) {
-        BKE_linestyle_make_local(bmain, (FreestyleLineStyle *)id, flags);
-      }
+      BLI_assert(0);
       return true;
     case ID_PAL:
       if (!test) {
@@ -563,14 +555,10 @@ bool BKE_lib_id_make_local(Main *bmain, ID *id, const bool test, const int flags
       }
       return true;
     case ID_PC:
-      if (!test) {
-        BKE_paint_curve_make_local(bmain, (PaintCurve *)id, flags);
-      }
+      BLI_assert(0);
       return true;
     case ID_CF:
-      if (!test) {
-        BKE_cachefile_make_local(bmain, (CacheFile *)id, flags);
-      }
+      BLI_assert(0);
       return true;
     case ID_WS:
     case ID_SCR:
@@ -749,30 +737,28 @@ bool BKE_id_copy_ex(Main *bmain, const ID *id, ID **r_newid, const int flag)
         BLI_assert(0);
         break;
       case ID_PA:
-        BKE_particlesettings_copy_data(
-            bmain, (ParticleSettings *)*r_newid, (ParticleSettings *)id, flag);
+        BLI_assert(0);
         break;
       case ID_GD:
         BKE_gpencil_copy_data((bGPdata *)*r_newid, (bGPdata *)id, flag);
         break;
       case ID_MC:
-        BKE_movieclip_copy_data(bmain, (MovieClip *)*r_newid, (MovieClip *)id, flag);
+        BLI_assert(0);
         break;
       case ID_MSK:
-        BKE_mask_copy_data(bmain, (Mask *)*r_newid, (Mask *)id, flag);
+        BLI_assert(0);
         break;
       case ID_LS:
-        BKE_linestyle_copy_data(
-            bmain, (FreestyleLineStyle *)*r_newid, (FreestyleLineStyle *)id, flag);
+        BLI_assert(0);
         break;
       case ID_PAL:
         BKE_palette_copy_data(bmain, (Palette *)*r_newid, (Palette *)id, flag);
         break;
       case ID_PC:
-        BKE_paint_curve_copy_data(bmain, (PaintCurve *)*r_newid, (PaintCurve *)id, flag);
+        BLI_assert(0);
         break;
       case ID_CF:
-        BKE_cachefile_copy_data(bmain, (CacheFile *)*r_newid, (CacheFile *)id, flag);
+        BLI_assert(0);
         break;
       case ID_SO:
         BLI_assert(0);
@@ -1307,7 +1293,7 @@ void BKE_libblock_init_empty(ID *id)
       BLI_assert(0);
       break;
     case ID_LI:
-      /* Nothing to do. */
+      BLI_assert(0);
       break;
     case ID_OB:
       BLI_assert(0);
@@ -1349,7 +1335,7 @@ void BKE_libblock_init_empty(ID *id)
       BLI_assert(0);
       break;
     case ID_SCR:
-      /* Nothing to do. */
+      BLI_assert(0);
       break;
     case ID_VF:
       BLI_assert(0);
@@ -1361,13 +1347,13 @@ void BKE_libblock_init_empty(ID *id)
       BLI_assert(0);
       break;
     case ID_GR:
-      /* Nothing to do. */
+      BLI_assert(0);
       break;
     case ID_AR:
-      /* Nothing to do. */
+      BLI_assert(0);
       break;
     case ID_AC:
-      /* Nothing to do. */
+      BLI_assert(0);
       break;
     case ID_NT:
       BLI_assert(0);
@@ -1376,22 +1362,22 @@ void BKE_libblock_init_empty(ID *id)
       BLI_assert(0);
       break;
     case ID_PA:
-      /* Nothing to do. */
+      BLI_assert(0);
       break;
     case ID_PC:
-      /* Nothing to do. */
+      BLI_assert(0);
       break;
     case ID_GD:
       /* Nothing to do. */
       break;
     case ID_MSK:
-      /* Nothing to do. */
+      BLI_assert(0);
       break;
     case ID_LS:
-      BKE_linestyle_init((FreestyleLineStyle *)id);
+      BLI_assert(0);
       break;
     case ID_CF:
-      BKE_cachefile_init((CacheFile *)id);
+      BLI_assert(0);
       break;
     case ID_KE:
       /* Shapekeys are a complex topic too - they depend on their 'user' data type...
