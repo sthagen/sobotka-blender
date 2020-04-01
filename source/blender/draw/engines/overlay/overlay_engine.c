@@ -241,7 +241,8 @@ static void OVERLAY_cache_populate(void *vedata, Object *ob)
                                 OB_POINTCLOUD,
                                 OB_VOLUME);
   const bool draw_surface = (ob->dt >= OB_WIRE) && (renderable || (ob->dt == OB_WIRE));
-  const bool draw_facing = draw_surface && (pd->overlay.flag & V3D_OVERLAY_FACE_ORIENTATION);
+  const bool draw_facing = draw_surface && (pd->overlay.flag & V3D_OVERLAY_FACE_ORIENTATION) &&
+                           !is_select;
   const bool draw_bones = (pd->overlay.flag & V3D_OVERLAY_HIDE_BONES) == 0;
   const bool draw_wires = draw_surface && has_surface &&
                           (pd->wireframe_mode || !pd->hide_overlays);
@@ -465,6 +466,8 @@ static void OVERLAY_draw_scene(void *vedata)
 
   OVERLAY_xray_fade_draw(vedata);
   OVERLAY_grid_draw(vedata);
+
+  OVERLAY_xray_depth_infront_copy(vedata);
 
   if (DRW_state_is_fbo()) {
     GPU_framebuffer_bind(fbl->overlay_line_in_front_fb);
