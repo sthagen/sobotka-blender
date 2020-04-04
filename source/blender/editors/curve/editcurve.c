@@ -36,7 +36,7 @@
 #include "BLT_translation.h"
 
 #include "BKE_action.h"
-#include "BKE_animsys.h"
+#include "BKE_anim_data.h"
 #include "BKE_context.h"
 #include "BKE_curve.h"
 #include "BKE_displist.h"
@@ -4196,10 +4196,7 @@ typedef struct NurbSort {
   float vec[3];
 } NurbSort;
 
-static ListBase nsortbase = {NULL, NULL};
-/*  static NurbSort *nusmain; */ /* this var seems to go unused... at least in this file */
-
-static void make_selection_list_nurb(View3D *v3d, ListBase *editnurb)
+static void make_selection_list_nurb(View3D *v3d, ListBase *editnurb, ListBase *nsortbase)
 {
   ListBase nbase = {NULL, NULL};
   NurbSort *nus, *nustest, *headdo, *taildo;
@@ -4228,7 +4225,7 @@ static void make_selection_list_nurb(View3D *v3d, ListBase *editnurb)
   /* just add the first one */
   nus = nbase.first;
   BLI_remlink(&nbase, nus);
-  BLI_addtail(&nsortbase, nus);
+  BLI_addtail(nsortbase, nus);
 
   /* now add, either at head or tail, the closest one */
   while (nbase.first) {
@@ -4238,13 +4235,13 @@ static void make_selection_list_nurb(View3D *v3d, ListBase *editnurb)
 
     nustest = nbase.first;
     while (nustest) {
-      dist = len_v3v3(nustest->vec, ((NurbSort *)nsortbase.first)->vec);
+      dist = len_v3v3(nustest->vec, ((NurbSort *)nsortbase->first)->vec);
 
       if (dist < headdist) {
         headdist = dist;
         headdo = nustest;
       }
-      dist = len_v3v3(nustest->vec, ((NurbSort *)nsortbase.last)->vec);
+      dist = len_v3v3(nustest->vec, ((NurbSort *)nsortbase->last)->vec);
 
       if (dist < taildist) {
         taildist = dist;
@@ -4255,11 +4252,11 @@ static void make_selection_list_nurb(View3D *v3d, ListBase *editnurb)
 
     if (headdist < taildist) {
       BLI_remlink(&nbase, headdo);
-      BLI_addhead(&nsortbase, headdo);
+      BLI_addhead(nsortbase, headdo);
     }
     else {
       BLI_remlink(&nbase, taildo);
-      BLI_addtail(&nsortbase, taildo);
+      BLI_addtail(nsortbase, taildo);
     }
   }
 }
@@ -4436,8 +4433,9 @@ static int merge_nurb(View3D *v3d, Object *obedit)
   ListBase *editnurb = object_editcurve_get(obedit);
   NurbSort *nus1, *nus2;
   bool ok = true;
+  ListBase nsortbase = {NULL, NULL};
 
-  make_selection_list_nurb(v3d, editnurb);
+  make_selection_list_nurb(v3d, editnurb, &nsortbase);
 
   if (nsortbase.first == nsortbase.last) {
     BLI_freelistN(&nsortbase);
@@ -5170,7 +5168,7 @@ static bool ed_editcurve_extrude(Curve *cu, EditNurb *editnurb, View3D *v3d)
   BKE_curve_nurb_vert_active_get(cu, &cu_actnu, &cu_actvert.p);
   int act_offset = 0;
 
-  for (Nurb *nu = editnurb->nurbs.first; nu; nu = nu->next) {
+  LISTBASE_FOREACH (Nurb *, nu, &editnurb->nurbs) {
     BLI_assert(nu->pntsu > 0);
     int i;
     int pnt_len = nu->pntsu;
@@ -6551,8 +6549,8 @@ static int curve_dissolve_exec(bContext *C, wmOperator *UNUSED(op))
 
     for (nu = editnurb->first; nu; nu = nu->next) {
       if ((nu->type == CU_BEZIER) && (nu->pntsu > 2)) {
-        unsigned int span_step[2] = {nu->pntsu, nu->pntsu};
-        unsigned int span_len;
+        uint span_step[2] = {nu->pntsu, nu->pntsu};
+        uint span_len;
 
         while (BLI_array_iter_span(nu->bezt,
                                    nu->pntsu,
@@ -6566,9 +6564,9 @@ static int curve_dissolve_exec(bContext *C, wmOperator *UNUSED(op))
           BezTriple *bezt_next = &nu->bezt[mod_i(span_step[1] + 1, nu->pntsu)];
 
           int i_span_edge_len = span_len + 1;
-          const unsigned int dims = 3;
+          const uint dims = 3;
 
-          const unsigned int points_len = ((cu->resolu - 1) * i_span_edge_len) + 1;
+          const uint points_len = ((cu->resolu - 1) * i_span_edge_len) + 1;
           float *points = MEM_mallocN(points_len * dims * sizeof(float), __func__);
           float *points_stride = points;
           const int points_stride_len = (cu->resolu - 1);
@@ -6593,7 +6591,7 @@ static int curve_dissolve_exec(bContext *C, wmOperator *UNUSED(op))
           BLI_assert(points_stride + dims == points + (points_len * dims));
 
           float tan_l[3], tan_r[3], error_sq_dummy;
-          unsigned int error_index_dummy;
+          uint error_index_dummy;
 
           sub_v3_v3v3(tan_l, bezt_prev->vec[1], bezt_prev->vec[2]);
           normalize_v3(tan_l);
@@ -6777,7 +6775,7 @@ static int shade_smooth_exec(bContext *C, wmOperator *op)
       continue;
     }
 
-    for (Nurb *nu = editnurb->first; nu; nu = nu->next) {
+    LISTBASE_FOREACH (Nurb *, nu, editnurb) {
       if (ED_curve_nurb_select_check(v3d, nu)) {
         if (!clear) {
           nu->flag |= CU_SMOOTH;
