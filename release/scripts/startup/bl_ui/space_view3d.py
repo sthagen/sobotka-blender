@@ -1224,6 +1224,7 @@ class VIEW3D_MT_view_cameras(Menu):
 
         layout.operator("view3d.object_as_camera")
         layout.operator("view3d.view_camera", text="Active Camera")
+        layout.operator("view3d.view_center_camera")
 
 
 class VIEW3D_MT_view_viewpoint(Menu):
@@ -3122,6 +3123,14 @@ class VIEW3D_MT_face_sets(Menu):
         layout.separator()
 
         layout.menu("VIEW3D_MT_face_sets_init", text="Init Face Sets")
+
+        layout.separator()
+
+        op = layout.operator("sculpt.face_set_edit", text='Grow Face Set')
+        op.mode = 'GROW'
+
+        op = layout.operator("sculpt.face_set_edit", text='Shrink Face Set')
+        op.mode = 'SHRINK'
 
         layout.separator()
 

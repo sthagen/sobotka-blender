@@ -236,10 +236,6 @@ static void applyTranslationValue(TransInfo *t, const float vec[3])
 
     TransData *td = tc->data;
     for (int i = 0; i < tc->data_len; i++, td++) {
-      if (td->flag & TD_NOACTION) {
-        break;
-      }
-
       if (td->flag & TD_SKIP) {
         continue;
       }
@@ -356,7 +352,7 @@ static void applyTranslation(TransInfo *t, const int UNUSED(mval[2]))
     /* vertices in the radius of the brush end */
     /* outside the clipping area               */
     /* XXX HACK - dg */
-    if (t->flag & T_PROP_EDIT_ALL) {
+    if (t->flag & T_PROP_EDIT) {
       clipUVData(t);
     }
   }

@@ -25,22 +25,34 @@
 
 #include "BLI_utildefines.h"
 
+#include "BLT_translation.h"
+
 #include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
+#include "DNA_screen_types.h"
 
+#include "BKE_context.h"
+#include "BKE_curve.h"
 #include "BKE_editmesh.h"
-#include "BKE_lattice.h"
 #include "BKE_lib_id.h"
 #include "BKE_lib_query.h"
 #include "BKE_mesh.h"
+#include "BKE_mesh_wrapper.h"
 #include "BKE_modifier.h"
+#include "BKE_screen.h"
+
+#include "UI_interface.h"
+#include "UI_resources.h"
+
+#include "RNA_access.h"
 
 #include "DEG_depsgraph.h"
 #include "DEG_depsgraph_build.h"
 #include "DEG_depsgraph_query.h"
 
 #include "MOD_modifiertypes.h"
+#include "MOD_ui_common.h"
 #include "MOD_util.h"
 
 static void initData(ModifierData *md)
@@ -117,16 +129,16 @@ static void deformVerts(ModifierData *md,
   int defgrp_index = -1;
   MOD_get_vgroup(ctx->object, mesh_src, cmd->name, &dvert, &defgrp_index);
 
-  /* silly that defaxis and curve_deform_verts are off by 1
+  /* silly that defaxis and BKE_curve_deform_coords are off by 1
    * but leave for now to save having to call do_versions */
-  curve_deform_verts(cmd->object,
-                     ctx->object,
-                     vertexCos,
-                     numVerts,
-                     dvert,
-                     defgrp_index,
-                     cmd->flag,
-                     cmd->defaxis - 1);
+  BKE_curve_deform_coords(cmd->object,
+                          ctx->object,
+                          vertexCos,
+                          numVerts,
+                          dvert,
+                          defgrp_index,
+                          cmd->flag,
+                          cmd->defaxis - 1);
 
   if (!ELEM(mesh_src, NULL, mesh)) {
     BKE_id_free(NULL, mesh_src);
@@ -152,6 +164,29 @@ static void deformVertsEM(ModifierData *md,
   if (!ELEM(mesh_src, NULL, mesh)) {
     BKE_id_free(NULL, mesh_src);
   }
+}
+
+static void panel_draw(const bContext *C, Panel *panel)
+{
+  uiLayout *layout = panel->layout;
+
+  PointerRNA ptr;
+  PointerRNA ob_ptr;
+  modifier_panel_get_property_pointers(C, panel, &ob_ptr, &ptr);
+
+  uiLayoutSetPropSep(layout, true);
+
+  uiItemR(layout, &ptr, "object", 0, IFACE_("Curve Object"), ICON_NONE);
+  uiItemR(layout, &ptr, "deform_axis", 0, NULL, ICON_NONE);
+
+  modifier_vgroup_ui(layout, &ptr, &ob_ptr, "vertex_group", "invert_vertex_group", NULL);
+
+  modifier_panel_end(layout, &ptr);
+}
+
+static void panelRegister(ARegionType *region_type)
+{
+  modifier_panel_register(region_type, eModifierType_Curve, panel_draw);
 }
 
 ModifierTypeInfo modifierType_Curve = {
@@ -184,4 +219,5 @@ ModifierTypeInfo modifierType_Curve = {
     /* foreachIDLink */ NULL,
     /* foreachTexLink */ NULL,
     /* freeRuntimeData */ NULL,
+    /* panelRegister */ panelRegister,
 };
