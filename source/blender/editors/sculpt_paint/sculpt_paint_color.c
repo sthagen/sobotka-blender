@@ -44,6 +44,8 @@
 
 #include "DEG_depsgraph.h"
 
+#include "IMB_colormanagement.h"
+
 #include "WM_api.h"
 #include "WM_message.h"
 #include "WM_toolsystem.h"
@@ -132,6 +134,7 @@ static void do_paint_brush_task_cb_ex(void *__restrict userdata,
 
   float brush_color[4] = {0.0f, 0.0f, 0.0f, 1.0f};
   copy_v3_v3(brush_color, BKE_brush_color_get(ss->scene, brush));
+  IMB_colormanagement_srgb_to_scene_linear_v3(brush_color);
 
   BKE_pbvh_vertex_iter_begin(ss->pbvh, data->nodes[n], vd, PBVH_ITER_UNIQUE)
   {
@@ -291,7 +294,7 @@ void SCULPT_do_paint_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int totnode
     };
 
     TaskParallelSettings settings;
-    BKE_pbvh_parallel_range_settings(&settings, (sd->flags & SCULPT_USE_OPENMP), totnode);
+    BKE_pbvh_parallel_range_settings(&settings, true, totnode);
     BLI_task_parallel_range(0, totnode, &data, do_color_smooth_task_cb_exec, &settings);
     return;
   }
@@ -313,7 +316,7 @@ void SCULPT_do_paint_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int totnode
     zero_v4(swptd.color);
 
     TaskParallelSettings settings_sample;
-    BKE_pbvh_parallel_range_settings(&settings_sample, (sd->flags & SCULPT_USE_OPENMP), totnode);
+    BKE_pbvh_parallel_range_settings(&settings_sample, true, totnode);
     settings_sample.func_reduce = sample_wet_paint_reduce;
     settings_sample.userdata_chunk = &swptd;
     settings_sample.userdata_chunk_size = sizeof(SampleWetPaintTLSData);
@@ -345,7 +348,7 @@ void SCULPT_do_paint_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int totnode
   };
 
   TaskParallelSettings settings;
-  BKE_pbvh_parallel_range_settings(&settings, (sd->flags & SCULPT_USE_OPENMP), totnode);
+  BKE_pbvh_parallel_range_settings(&settings, true, totnode);
   BLI_task_parallel_range(0, totnode, &data, do_paint_brush_task_cb_ex, &settings);
 }
 
@@ -460,7 +463,7 @@ void SCULPT_do_smear_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int totnode
   };
 
   TaskParallelSettings settings;
-  BKE_pbvh_parallel_range_settings(&settings, (sd->flags & SCULPT_USE_OPENMP), totnode);
+  BKE_pbvh_parallel_range_settings(&settings, true, totnode);
 
   /* Smooth colors mode. */
   if (ss->cache->alt_smooth) {
