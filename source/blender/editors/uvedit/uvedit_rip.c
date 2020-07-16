@@ -657,7 +657,7 @@ static UVRipPairs *uv_rip_pairs_from_loop(BMLoop *l_init,
             BMLoop *l_other = (l_radial_iter->v == l_step->v) ? l_radial_iter :
                                                                 l_radial_iter->next;
             BLI_assert(l_other->v == l_step->v);
-            if (BM_loop_uv_share_vert_check(e_radial, l_other, l_step, cd_loop_uv_offset)) {
+            if (BM_edge_uv_share_vert_check(e_radial, l_other, l_step, cd_loop_uv_offset)) {
               if (!UL(l_other)->in_rip_pairs && !UL(l_other)->in_stack) {
                 BLI_SMALLSTACK_PUSH(stack, l_other);
                 UL(l_other)->in_stack = true;
@@ -812,26 +812,25 @@ static bool uv_rip_object(Scene *scene, Object *obedit, const float co[2], const
     }
   }
 
-  /* Mark only boundary edges. */
+  /* Special case: if we have selected faces, isolated them.
+   * This isn't a rip, however it's useful for users as a quick way
+   * to detach the selection.
+   *
+   * We could also extract an edge loop from the boundary
+   * however in practice it's not that useful, see T78751. */
   if (is_select_all_any) {
     BM_ITER_MESH (efa, &iter, em->bm, BM_FACES_OF_MESH) {
-      if (BM_elem_flag_test(efa, BM_ELEM_TAG)) {
-        BMLoop *l_first = BM_FACE_FIRST_LOOP(efa);
-        if (UL(l_first)->is_select_all) {
-          BMLoop *l_iter = l_first;
-          do {
-            BMLoop *l_other = bm_loop_find_other_radial_loop_with_visible_face(l_iter,
-                                                                               cd_loop_uv_offset);
-            if (l_other != NULL) {
-              if (UL(l_other)->is_select_all) {
-                UL(l_iter)->is_select_edge = false;
-                UL(l_other)->is_select_edge = false;
-              }
-            }
-          } while ((l_iter = l_iter->next) != l_first);
+      BM_ITER_ELEM (l, &liter, efa, BM_LOOPS_OF_FACE) {
+        if (!UL(l)->is_select_all) {
+          MLoopUV *luv = BM_ELEM_CD_GET_VOID_P(l, cd_loop_uv_offset);
+          if (luv->flag & MLOOPUV_VERTSEL) {
+            luv->flag &= ~MLOOPUV_VERTSEL;
+            changed = true;
+          }
         }
       }
     }
+    return changed;
   }
 
   /* Extract loop pairs or single loops. */
@@ -963,7 +962,7 @@ void UV_OT_rip(wmOperatorType *ot)
   ot->poll = ED_operator_uvedit;
 
   /* translation data */
-  Transform_Properties(ot, P_PROPORTIONAL | P_MIRROR_DUMMY);
+  Transform_Properties(ot, P_MIRROR_DUMMY);
 
   /* properties */
   RNA_def_float_vector(

@@ -2655,8 +2655,10 @@ void DepsgraphRelationBuilder::build_scene_sequencer(Scene *scene)
 
 void DepsgraphRelationBuilder::build_scene_audio(Scene *scene)
 {
+  OperationKey scene_audio_entry_key(&scene->id, NodeType::AUDIO, OperationCode::AUDIO_ENTRY);
   OperationKey scene_audio_volume_key(&scene->id, NodeType::AUDIO, OperationCode::AUDIO_VOLUME);
   OperationKey scene_sound_eval_key(&scene->id, NodeType::AUDIO, OperationCode::SOUND_EVAL);
+  add_relation(scene_audio_entry_key, scene_audio_volume_key, "Audio Entry -> Volume");
   add_relation(scene_audio_volume_key, scene_sound_eval_key, "Audio Volume -> Sound");
 
   if (scene->audio.flag & AUDIO_VOLUME_ANIMATED) {
@@ -2949,7 +2951,7 @@ void DepsgraphRelationBuilder::build_driver_relations(IDNode *id_node)
         }
 
         add_operation_relation(
-            op_from->get_exit_operation(), op_to->get_entry_operation(), "Driver Serialisation");
+            op_from->get_exit_operation(), op_to->get_entry_operation(), "Driver Serialization");
         break;
       }
     }
