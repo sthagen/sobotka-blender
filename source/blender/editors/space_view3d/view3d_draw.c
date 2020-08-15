@@ -668,7 +668,8 @@ static void drawviewborder(Scene *scene, Depsgraph *depsgraph, ARegion *region, 
 
   /* safety border */
   if (ca) {
-    immUniformThemeColorBlend(TH_VIEW_OVERLAY, TH_BACK, 0.25f);
+    GPU_blend(true);
+    immUniformThemeColorAlpha(TH_VIEW_OVERLAY, 0.75f);
 
     if (ca->dtx & CAM_DTX_CENTER) {
       float x3, y3;
@@ -778,6 +779,8 @@ static void drawviewborder(Scene *scene, Depsgraph *depsgraph, ARegion *region, 
        * 2.0f round corner effect was nearly not visible anyway... */
       imm_draw_box_wire_2d(shdr_pos, rect.xmin, rect.ymin, rect.xmax, rect.ymax);
     }
+
+    GPU_blend(false);
   }
 
   immUnbindProgram();
@@ -1619,10 +1622,6 @@ void view3d_main_region_draw(const bContext *C, ARegion *region)
   DRW_cache_free_old_batches(bmain);
   BKE_image_free_old_gputextures(bmain);
   GPU_pass_cache_garbage_collect();
-
-  /* XXX This is in order to draw UI batches with the DRW
-   * old context since we now use it for drawing the entire area. */
-  gpu_batch_presets_reset();
 
   /* No depth test for drawing action zones afterwards. */
   GPU_depth_test(false);

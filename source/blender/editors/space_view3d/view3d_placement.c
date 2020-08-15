@@ -246,7 +246,7 @@ static bool idp_poject_surface_normal(SnapObjectContext *snap_context,
 /** \name Primitive Drawing (Cube, Cone, Cylinder...)
  * \{ */
 
-static void draw_line_loop(float coords[][3], int coords_len, const float color[4])
+static void draw_line_loop(const float coords[][3], int coords_len, const float color[4])
 {
   GPUVertFormat *format = immVertexFormat();
   uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
@@ -262,8 +262,6 @@ static void draw_line_loop(float coords[][3], int coords_len, const float color[
   GPUBatch *batch = GPU_batch_create_ex(GPU_PRIM_LINE_LOOP, vert, NULL, GPU_BATCH_OWNS_VBO);
   GPU_batch_program_set_builtin(batch, GPU_SHADER_3D_POLYLINE_UNIFORM_COLOR);
 
-  GPU_batch_bind(batch);
-
   GPU_batch_uniform_4fv(batch, "color", color);
 
   float viewport[4];
@@ -273,13 +271,11 @@ static void draw_line_loop(float coords[][3], int coords_len, const float color[
 
   GPU_batch_draw(batch);
 
-  GPU_batch_program_use_end(batch);
-
   GPU_batch_discard(batch);
   GPU_blend(false);
 }
 
-static void draw_line_pairs(float coords_a[][3],
+static void draw_line_pairs(const float coords_a[][3],
                             float coords_b[][3],
                             int coords_len,
                             const float color[4])
@@ -299,8 +295,6 @@ static void draw_line_pairs(float coords_a[][3],
   GPUBatch *batch = GPU_batch_create_ex(GPU_PRIM_LINES, vert, NULL, GPU_BATCH_OWNS_VBO);
   GPU_batch_program_set_builtin(batch, GPU_SHADER_3D_POLYLINE_UNIFORM_COLOR);
 
-  GPU_batch_bind(batch);
-
   GPU_batch_uniform_4fv(batch, "color", color);
 
   float viewport[4];
@@ -309,8 +303,6 @@ static void draw_line_pairs(float coords_a[][3],
   GPU_batch_uniform_1f(batch, "lineWidth", U.pixelsize);
 
   GPU_batch_draw(batch);
-
-  GPU_batch_program_use_end(batch);
 
   GPU_batch_discard(batch);
   GPU_blend(false);
@@ -321,7 +313,7 @@ static void draw_line_bounds(const BoundBox *bounds, const float color[4])
   GPUVertFormat *format = immVertexFormat();
   uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
 
-  int edges[12][2] = {
+  const int edges[12][2] = {
       /* First side. */
       {0, 1},
       {1, 2},
@@ -351,8 +343,6 @@ static void draw_line_bounds(const BoundBox *bounds, const float color[4])
   GPUBatch *batch = GPU_batch_create_ex(GPU_PRIM_LINES, vert, NULL, GPU_BATCH_OWNS_VBO);
   GPU_batch_program_set_builtin(batch, GPU_SHADER_3D_POLYLINE_UNIFORM_COLOR);
 
-  GPU_batch_bind(batch);
-
   GPU_batch_uniform_4fv(batch, "color", color);
 
   float viewport[4];
@@ -361,8 +351,6 @@ static void draw_line_bounds(const BoundBox *bounds, const float color[4])
   GPU_batch_uniform_1f(batch, "lineWidth", U.pixelsize);
 
   GPU_batch_draw(batch);
-
-  GPU_batch_program_use_end(batch);
 
   GPU_batch_discard(batch);
   GPU_blend(false);
@@ -507,7 +495,7 @@ static void draw_circle_in_quad(const float v1[2],
     float theta = ((2.0f * M_PI) * ((float)i / (float)resolution)) + 0.01f;
     float x = cosf(theta);
     float y = sinf(theta);
-    float pt[2] = {x, y};
+    const float pt[2] = {x, y};
     float w[4];
     barycentric_weights_v2_quad(UNPACK4(quad), pt, w);
 

@@ -291,7 +291,7 @@ static void region_draw_azone_tab_arrow(ScrArea *area, ARegion *region, AZone *a
 
   /* Workaround for different color spaces between normal areas and the ones using GPUViewports. */
   float alpha = WM_region_use_viewport(area, region) ? 0.6f : 0.4f;
-  float color[4] = {0.05f, 0.05f, 0.05f, alpha};
+  const float color[4] = {0.05f, 0.05f, 0.05f, alpha};
   UI_draw_roundbox_aa(
       true, (float)az->x1, (float)az->y1, (float)az->x2, (float)az->y2, 4.0f, color);
 
@@ -2126,7 +2126,7 @@ void ED_area_newspace(bContext *C, ScrArea *area, int type, const bool skip_regi
     area->spacetype = type;
     area->type = st;
 
-    /* If st->new may be called, don't use context until then. The
+    /* If st->create may be called, don't use context until then. The
      * area->type->context() callback has changed but data may be invalid
      * (e.g. with properties editor) until space-data is properly created */
 
@@ -2166,7 +2166,7 @@ void ED_area_newspace(bContext *C, ScrArea *area, int type, const bool skip_regi
       if (st) {
         /* Don't get scene from context here which may depend on space-data. */
         Scene *scene = WM_window_get_active_scene(win);
-        sl = st->new (area, scene);
+        sl = st->create(area, scene);
         BLI_addhead(&area->spacedata, sl);
 
         /* swap regions */
@@ -2658,29 +2658,35 @@ void ED_region_panels_layout_ex(const bContext *C,
   if (has_instanced_panel) {
     LISTBASE_FOREACH (Panel *, panel, &region->panels) {
       if (panel->type == NULL) {
-        continue; /* Some panels don't have a type.. */
+        continue; /* Some panels don't have a type. */
       }
-      if (panel->type->flag & PNL_INSTANCED) {
-        if (panel && UI_panel_is_dragging(panel)) {
-          /* Prevent View2d.tot rectangle size changes while dragging panels. */
-          update_tot_size = false;
-        }
+      if (!(panel->type->flag & PNL_INSTANCED)) {
+        continue;
+      }
+      if (use_category_tabs && panel->type->category[0] &&
+          !STREQ(category, panel->type->category)) {
+        continue;
+      }
 
-        /* Use a unique identifier for instanced panels, otherwise an old block for a different
-         * panel of the same type might be found. */
-        char unique_panel_str[8];
-        UI_list_panel_unique_str(panel, unique_panel_str);
-        ed_panel_draw(C,
-                      area,
-                      region,
-                      &region->panels,
-                      panel->type,
-                      panel,
-                      (panel->type->flag & PNL_DRAW_BOX) ? w_box_panel : w,
-                      em,
-                      vertical,
-                      unique_panel_str);
+      if (panel && UI_panel_is_dragging(panel)) {
+        /* Prevent View2d.tot rectangle size changes while dragging panels. */
+        update_tot_size = false;
       }
+
+      /* Use a unique identifier for instanced panels, otherwise an old block for a different
+       * panel of the same type might be found. */
+      char unique_panel_str[8];
+      UI_list_panel_unique_str(panel, unique_panel_str);
+      ed_panel_draw(C,
+                    area,
+                    region,
+                    &region->panels,
+                    panel->type,
+                    panel,
+                    (panel->type->flag & PNL_DRAW_BOX) ? w_box_panel : w,
+                    em,
+                    vertical,
+                    unique_panel_str);
     }
   }
 
