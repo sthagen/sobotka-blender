@@ -85,7 +85,8 @@ void BLI_insertlinkbefore(struct ListBase *listbase, void *vnextlink, void *vnew
     ATTR_NONNULL(1);
 void BLI_insertlinkafter(struct ListBase *listbase, void *vprevlink, void *vnewlink)
     ATTR_NONNULL(1);
-void BLI_insertlinkreplace(ListBase *listbase, void *v_l_src, void *v_l_dst) ATTR_NONNULL(1, 2, 3);
+void BLI_insertlinkreplace(ListBase *listbase, void *vreplacelink, void *vnewlink)
+    ATTR_NONNULL(1, 2, 3);
 void BLI_listbase_sort(struct ListBase *listbase, int (*cmp)(const void *, const void *))
     ATTR_NONNULL(1, 2);
 void BLI_listbase_sort_r(ListBase *listbase,
@@ -170,6 +171,15 @@ struct LinkData *BLI_genericNodeN(void *data);
 
 #define LISTBASE_FOREACH(type, var, list) \
   for (type var = (type)((list)->first); var != NULL; var = (type)(((Link *)(var))->next))
+
+/**
+ * A version of #LISTBASE_FOREACH that supports incrementing an index variable at every step.
+ * Including this in the macro helps prevent mistakes where "continue" mistakenly skips the
+ * incrementation.
+ */
+#define LISTBASE_FOREACH_INDEX(type, var, list, index_var) \
+  for (type var = (((void)(index_var = 0)), (type)((list)->first)); var != NULL; \
+       var = (type)(((Link *)(var))->next), index_var++)
 
 #define LISTBASE_FOREACH_BACKWARD(type, var, list) \
   for (type var = (type)((list)->last); var != NULL; var = (type)(((Link *)(var))->prev))

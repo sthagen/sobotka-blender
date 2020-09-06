@@ -30,6 +30,10 @@
 #include "gl_batch.hh"
 #include "gl_context.hh"
 #include "gl_drawlist.hh"
+#include "gl_framebuffer.hh"
+#include "gl_shader.hh"
+#include "gl_texture.hh"
+#include "gl_uniform_buffer.hh"
 
 namespace blender {
 namespace gpu {
@@ -39,6 +43,25 @@ class GLBackend : public GPUBackend {
   GLSharedOrphanLists shared_orphan_list_;
 
  public:
+  GLBackend()
+  {
+    GLTexture::samplers_init();
+  }
+  ~GLBackend()
+  {
+    GLTexture::samplers_free();
+  }
+
+  static GLBackend *get(void)
+  {
+    return static_cast<GLBackend *>(GPUBackend::get());
+  }
+
+  void samplers_update(void) override
+  {
+    GLTexture::samplers_update();
+  };
+
   GPUContext *context_alloc(void *ghost_window)
   {
     return new GLContext(ghost_window, shared_orphan_list_);
@@ -52,6 +75,26 @@ class GLBackend : public GPUBackend {
   DrawList *drawlist_alloc(int list_length)
   {
     return new GLDrawList(list_length);
+  };
+
+  FrameBuffer *framebuffer_alloc(const char *name)
+  {
+    return new GLFrameBuffer(name);
+  };
+
+  Shader *shader_alloc(const char *name)
+  {
+    return new GLShader(name);
+  };
+
+  Texture *texture_alloc(const char *name)
+  {
+    return new GLTexture(name);
+  };
+
+  UniformBuf *uniformbuf_alloc(int size, const char *name)
+  {
+    return new GLUniformBuf(size, name);
   };
 
   /* TODO remove */

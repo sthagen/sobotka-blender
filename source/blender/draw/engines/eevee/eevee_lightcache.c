@@ -401,16 +401,9 @@ static bool eevee_lightcache_static_load(LightCache *lcache)
   }
 
   if (lcache->grid_tx.tex == NULL) {
-    lcache->grid_tx.tex = GPU_texture_create_nD(lcache->grid_tx.tex_size[0],
-                                                lcache->grid_tx.tex_size[1],
-                                                lcache->grid_tx.tex_size[2],
-                                                2,
-                                                lcache->grid_tx.data,
-                                                IRRADIANCE_FORMAT,
-                                                GPU_DATA_UNSIGNED_BYTE,
-                                                0,
-                                                false,
-                                                NULL);
+    lcache->grid_tx.tex = GPU_texture_create_2d_array(
+        "lightcache_irradiance", UNPACK3(lcache->grid_tx.tex_size), 1, IRRADIANCE_FORMAT, NULL);
+    GPU_texture_update(lcache->grid_tx.tex, GPU_DATA_UNSIGNED_BYTE, lcache->grid_tx.data);
 
     if (lcache->grid_tx.tex == NULL) {
       lcache->flag |= LIGHTCACHE_NOT_USABLE;
@@ -422,24 +415,19 @@ static bool eevee_lightcache_static_load(LightCache *lcache)
 
   if (lcache->cube_tx.tex == NULL) {
     if (GPU_arb_texture_cube_map_array_is_supported()) {
-      lcache->cube_tx.tex = GPU_texture_cube_create(lcache->cube_tx.tex_size[0],
-                                                    lcache->cube_tx.tex_size[2] / 6,
-                                                    lcache->cube_tx.data,
-                                                    GPU_R11F_G11F_B10F,
-                                                    GPU_DATA_10_11_11_REV,
-                                                    NULL);
+      lcache->cube_tx.tex = GPU_texture_create_cube_array("lightcache_cubemaps",
+                                                          lcache->cube_tx.tex_size[0],
+                                                          lcache->cube_tx.tex_size[2] / 6,
+                                                          lcache->mips_len + 1,
+                                                          GPU_R11F_G11F_B10F,
+                                                          NULL);
     }
     else {
-      lcache->cube_tx.tex = GPU_texture_create_nD(lcache->cube_tx.tex_size[0],
-                                                  lcache->cube_tx.tex_size[1],
-                                                  lcache->cube_tx.tex_size[2],
-                                                  2,
-                                                  lcache->cube_tx.data,
-                                                  GPU_R11F_G11F_B10F,
-                                                  GPU_DATA_10_11_11_REV,
-                                                  0,
-                                                  false,
-                                                  NULL);
+      lcache->cube_tx.tex = GPU_texture_create_2d_array("lightcache_cubemaps_fallback",
+                                                        UNPACK3(lcache->cube_tx.tex_size),
+                                                        lcache->mips_len + 1,
+                                                        GPU_R11F_G11F_B10F,
+                                                        NULL);
     }
 
     if (lcache->cube_tx.tex == NULL) {
@@ -447,9 +435,9 @@ static bool eevee_lightcache_static_load(LightCache *lcache)
       return false;
     }
 
-    for (int mip = 0; mip < lcache->mips_len; mip++) {
-      GPU_texture_add_mipmap(
-          lcache->cube_tx.tex, GPU_DATA_10_11_11_REV, mip + 1, lcache->cube_mips[mip].data);
+    for (int mip = 0; mip <= lcache->mips_len; mip++) {
+      const void *data = (mip == 0) ? lcache->cube_tx.data : lcache->cube_mips[mip - 1].data;
+      GPU_texture_update_mipmap(lcache->cube_tx.tex, mip, GPU_DATA_10_11_11_REV, data);
     }
     GPU_texture_mipmap_mode(lcache->cube_tx.tex, true, true);
   }
@@ -942,7 +930,7 @@ static void eevee_lightbake_render_world_sample(void *ved, void *user_data)
 
   sldata->common_data.ray_type = EEVEE_RAY_GLOSSY;
   sldata->common_data.ray_depth = 1;
-  DRW_uniformbuffer_update(sldata->common_ubo, &sldata->common_data);
+  GPU_uniformbuf_update(sldata->common_ubo, &sldata->common_data);
   EEVEE_lightbake_render_world(sldata, vedata, lbake->rt_fb);
   EEVEE_lightbake_filter_glossy(sldata,
                                 vedata,
@@ -956,7 +944,7 @@ static void eevee_lightbake_render_world_sample(void *ved, void *user_data)
 
   sldata->common_data.ray_type = EEVEE_RAY_DIFFUSE;
   sldata->common_data.ray_depth = 1;
-  DRW_uniformbuffer_update(sldata->common_ubo, &sldata->common_data);
+  GPU_uniformbuf_update(sldata->common_ubo, &sldata->common_data);
   EEVEE_lightbake_render_world(sldata, vedata, lbake->rt_fb);
   EEVEE_lightbake_filter_diffuse(sldata, vedata, lbake->rt_color, lbake->store_fb, 0, 1.0f);
 
@@ -1079,7 +1067,7 @@ static void eevee_lightbake_render_grid_sample(void *ved, void *user_data)
   if (lbake->bounce_curr == 0) {
     common_data->prb_num_render_grid = 0;
   }
-  DRW_uniformbuffer_update(sldata->common_ubo, &sldata->common_data);
+  GPU_uniformbuf_update(sldata->common_ubo, &sldata->common_data);
 
   EEVEE_lightbake_render_scene(sldata, vedata, lbake->rt_fb, pos, prb->clipsta, prb->clipend);
 
@@ -1145,7 +1133,7 @@ static void eevee_lightbake_render_probe_sample(void *ved, void *user_data)
   common_data->prb_num_render_cube = 0;
   common_data->ray_type = EEVEE_RAY_GLOSSY;
   common_data->ray_depth = 1;
-  DRW_uniformbuffer_update(sldata->common_ubo, &sldata->common_data);
+  GPU_uniformbuf_update(sldata->common_ubo, &sldata->common_data);
 
   EEVEE_lightbake_render_scene(
       sldata, vedata, lbake->rt_fb, eprobe->position, prb->clipsta, prb->clipend);
@@ -1302,8 +1290,8 @@ void EEVEE_lightbake_job(void *custom_data, short *stop, short *do_update, float
   EEVEE_LightBake *lbake = (EEVEE_LightBake *)custom_data;
   Depsgraph *depsgraph = lbake->depsgraph;
 
-  DEG_graph_relations_update(depsgraph, lbake->bmain, lbake->scene, lbake->view_layer_input);
-  DEG_evaluate_on_framechange(lbake->bmain, depsgraph, lbake->frame);
+  DEG_graph_relations_update(depsgraph);
+  DEG_evaluate_on_framechange(depsgraph, lbake->frame);
 
   lbake->view_layer = DEG_get_evaluated_view_layer(depsgraph);
   lbake->stop = stop;
@@ -1430,7 +1418,7 @@ void EEVEE_lightbake_update_world_quick(EEVEE_ViewLayerData *sldata,
 
   sldata->common_data.ray_type = EEVEE_RAY_GLOSSY;
   sldata->common_data.ray_depth = 1;
-  DRW_uniformbuffer_update(sldata->common_ubo, &sldata->common_data);
+  GPU_uniformbuf_update(sldata->common_ubo, &sldata->common_data);
   EEVEE_lightbake_render_world(sldata, vedata, lbake.rt_fb);
   EEVEE_lightbake_filter_glossy(sldata,
                                 vedata,
@@ -1444,7 +1432,7 @@ void EEVEE_lightbake_update_world_quick(EEVEE_ViewLayerData *sldata,
 
   sldata->common_data.ray_type = EEVEE_RAY_DIFFUSE;
   sldata->common_data.ray_depth = 1;
-  DRW_uniformbuffer_update(sldata->common_ubo, &sldata->common_data);
+  GPU_uniformbuf_update(sldata->common_ubo, &sldata->common_data);
   EEVEE_lightbake_render_world(sldata, vedata, lbake.rt_fb);
   EEVEE_lightbake_filter_diffuse(sldata, vedata, lbake.rt_color, lbake.store_fb, 0, 1.0f);
 

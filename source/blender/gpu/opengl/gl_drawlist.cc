@@ -33,10 +33,10 @@
 
 #include "gpu_context_private.hh"
 #include "gpu_drawlist_private.hh"
-#include "gpu_primitive_private.h"
 
 #include "gl_backend.hh"
 #include "gl_drawlist.hh"
+#include "gl_primitive.hh"
 
 #include <limits.h>
 
@@ -151,6 +151,11 @@ void GLDrawList::append(GPUBatch *batch, int i_first, int i_count)
     v_count_ = batch->elem ? batch->elem->index_len : batch->verts[0]->vertex_len;
   }
 
+  if (v_count_ == 0) {
+    /* Nothing to draw. */
+    return;
+  }
+
   if (MDI_INDEXED) {
     GLDrawCommandIndexed *cmd = reinterpret_cast<GLDrawCommandIndexed *>(data_ + command_offset_);
     cmd->v_first = v_first_;
@@ -194,7 +199,7 @@ void GLDrawList::submit(void)
    * case where only a few instances are needed to finish filling a call buffer. */
   const bool is_finishing_a_buffer = (command_offset_ >= data_size_);
   if (command_len_ > 2 || is_finishing_a_buffer) {
-    GLenum prim = convert_prim_type_to_gl(batch_->prim_type);
+    GLenum prim = to_gl(batch_->prim_type);
     void *offset = (void *)data_offset_;
 
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, buffer_id_);
@@ -235,6 +240,8 @@ void GLDrawList::submit(void)
   }
   /* Do not submit this buffer again. */
   command_len_ = 0;
+  /* Avoid keeping reference to the batch. */
+  batch_ = NULL;
 }
 
 /** \} */

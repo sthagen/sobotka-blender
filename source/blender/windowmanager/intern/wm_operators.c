@@ -2217,13 +2217,11 @@ static void radial_control_set_tex(RadialControl *rc)
                rc->use_secondary_tex,
                !ELEM(rc->subtype, PROP_NONE, PROP_PIXEL, PROP_DISTANCE)))) {
 
-        rc->texture = GPU_texture_create_nD(
-            ibuf->x, ibuf->y, 0, 2, ibuf->rect_float, GPU_R8, GPU_DATA_FLOAT, 0, false, NULL);
-        GPU_texture_filter_mode(rc->texture, true);
+        rc->texture = GPU_texture_create_2d(
+            "radial_control", ibuf->x, ibuf->y, 1, GPU_R8, ibuf->rect_float);
 
-        GPU_texture_bind(rc->texture, 0);
+        GPU_texture_filter_mode(rc->texture, true);
         GPU_texture_swizzle_set(rc->texture, "111r");
-        GPU_texture_unbind(rc->texture);
 
         MEM_freeN(ibuf->rect_float);
         MEM_freeN(ibuf);
@@ -2393,7 +2391,7 @@ static void radial_control_paint_cursor(bContext *UNUSED(C), int x, int y, void 
   }
   GPU_matrix_translate_2f((float)x, (float)y);
 
-  GPU_blend(true);
+  GPU_blend(GPU_BLEND_ALPHA);
   GPU_line_smooth(true);
 
   /* apply zoom if available */
@@ -2472,7 +2470,7 @@ static void radial_control_paint_cursor(bContext *UNUSED(C), int x, int y, void 
   BLF_position(fontid, -0.5f * strwidth, -0.5f * strheight, 0.0f);
   BLF_draw(fontid, str, strdrawlen);
 
-  GPU_blend(false);
+  GPU_blend(GPU_BLEND_NONE);
   GPU_line_smooth(false);
 }
 
@@ -3151,7 +3149,6 @@ static const EnumPropertyItem redraw_timer_type_items[] = {
 };
 
 static void redraw_timer_step(bContext *C,
-                              Main *bmain,
                               Scene *scene,
                               struct Depsgraph *depsgraph,
                               wmWindow *win,
@@ -3202,7 +3199,7 @@ static void redraw_timer_step(bContext *C,
   }
   else if (type == eRTAnimationStep) {
     scene->r.cfra += (cfra == scene->r.cfra) ? 1 : -1;
-    BKE_scene_graph_update_for_newframe(depsgraph, bmain);
+    BKE_scene_graph_update_for_newframe(depsgraph);
   }
   else if (type == eRTAnimationPlay) {
     /* play anim, return on same frame as started with */
@@ -3215,7 +3212,7 @@ static void redraw_timer_step(bContext *C,
         scene->r.cfra = scene->r.sfra;
       }
 
-      BKE_scene_graph_update_for_newframe(depsgraph, bmain);
+      BKE_scene_graph_update_for_newframe(depsgraph);
       redraw_timer_window_swap(C);
     }
   }
@@ -3231,7 +3228,6 @@ static void redraw_timer_step(bContext *C,
 
 static int redraw_timer_exec(bContext *C, wmOperator *op)
 {
-  Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   wmWindow *win = CTX_wm_window(C);
   ScrArea *area = CTX_wm_area(C);
@@ -3256,7 +3252,7 @@ static int redraw_timer_exec(bContext *C, wmOperator *op)
   wm_window_make_drawable(wm, win);
 
   for (a = 0; a < iter; a++) {
-    redraw_timer_step(C, bmain, scene, depsgraph, win, area, region, type, cfra);
+    redraw_timer_step(C, scene, depsgraph, win, area, region, type, cfra);
     iter_steps += 1;
 
     if (time_limit != 0.0) {
@@ -3906,6 +3902,7 @@ static void gesture_box_modal_keymap(wmKeyConfig *keyconf)
   WM_modalkeymap_assign(keymap, "CLIP_OT_graph_select_box");
   WM_modalkeymap_assign(keymap, "MASK_OT_select_box");
   WM_modalkeymap_assign(keymap, "PAINT_OT_mask_box_gesture");
+  WM_modalkeymap_assign(keymap, "SCULPT_OT_face_set_box_gesture");
   WM_modalkeymap_assign(keymap, "VIEW2D_OT_zoom_border");
   WM_modalkeymap_assign(keymap, "VIEW3D_OT_clip_border");
   WM_modalkeymap_assign(keymap, "VIEW3D_OT_render_border");

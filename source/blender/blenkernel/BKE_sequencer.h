@@ -62,29 +62,33 @@ typedef struct SeqIterator {
   int valid;
 } SeqIterator;
 
-void BKE_sequence_iterator_begin(struct Editing *ed, SeqIterator *iter, bool use_pointer);
+void BKE_sequence_iterator_begin(struct Editing *ed,
+                                 SeqIterator *iter,
+                                 const bool use_current_sequences);
 void BKE_sequence_iterator_next(SeqIterator *iter);
 void BKE_sequence_iterator_end(SeqIterator *iter);
 
-#define SEQP_BEGIN(_ed, _seq) \
-  { \
-    SeqIterator iter_macro; \
-    for (BKE_sequence_iterator_begin(_ed, &iter_macro, true); iter_macro.valid; \
-         BKE_sequence_iterator_next(&iter_macro)) { \
-      _seq = iter_macro.seq;
-
-#define SEQ_BEGIN(ed, _seq) \
+#define SEQ_ALL_BEGIN(ed, _seq) \
   { \
     SeqIterator iter_macro; \
     for (BKE_sequence_iterator_begin(ed, &iter_macro, false); iter_macro.valid; \
          BKE_sequence_iterator_next(&iter_macro)) { \
       _seq = iter_macro.seq;
 
-#define SEQ_END \
+#define SEQ_ALL_END \
   } \
   BKE_sequence_iterator_end(&iter_macro); \
   } \
   ((void)0)
+
+#define SEQ_CURRENT_BEGIN(_ed, _seq) \
+  { \
+    SeqIterator iter_macro; \
+    for (BKE_sequence_iterator_begin(_ed, &iter_macro, true); iter_macro.valid; \
+         BKE_sequence_iterator_next(&iter_macro)) { \
+      _seq = iter_macro.seq;
+
+#define SEQ_CURRENT_END SEQ_ALL_END
 
 typedef enum eSeqTaskId {
   SEQ_TASK_MAIN_RENDER,
@@ -259,10 +263,10 @@ struct Mask *BKE_sequencer_mask_get(struct Scene *scene);
 
 /* apply functions recursively */
 int BKE_sequencer_base_recursive_apply(struct ListBase *seqbase,
-                                       int (*apply_func)(struct Sequence *seq, void *),
+                                       int (*apply_fn)(struct Sequence *seq, void *),
                                        void *arg);
 int BKE_sequencer_recursive_apply(struct Sequence *seq,
-                                  int (*apply_func)(struct Sequence *, void *),
+                                  int (*apply_fn)(struct Sequence *, void *),
                                   void *arg);
 
 /* maintenance functions, mostly for RNA */
@@ -315,7 +319,7 @@ bool BKE_sequencer_proxy_rebuild_context(struct Main *bmain,
 void BKE_sequencer_proxy_rebuild(struct SeqIndexBuildContext *context,
                                  short *stop,
                                  short *do_update,
-                                 float *num_frames_prefetched);
+                                 float *progress);
 void BKE_sequencer_proxy_rebuild_finish(struct SeqIndexBuildContext *context, bool stop);
 
 void BKE_sequencer_proxy_set(struct Sequence *seq, bool value);
@@ -336,7 +340,7 @@ void BKE_sequencer_cache_put(const SeqRenderData *context,
                              struct Sequence *seq,
                              float cfra,
                              int type,
-                             struct ImBuf *nval,
+                             struct ImBuf *i,
                              float cost,
                              bool skip_disk_cache);
 bool BKE_sequencer_cache_put_if_possible(const SeqRenderData *context,

@@ -38,9 +38,10 @@
 #include "gpu_backend.hh"
 #include "gpu_batch_private.hh"
 #include "gpu_context_private.hh"
-#include "gpu_primitive_private.h"
-#include "gpu_shader_private.h"
+#include "gpu_shader_private.hh"
 #include "gpu_vertex_format_private.h"
+
+#include "gl_primitive.hh" /* TODO remove */
 
 #include <limits.h>
 #include <stdlib.h>
@@ -176,8 +177,7 @@ int GPU_batch_instbuf_add_ex(GPUBatch *batch, GPUVertBuf *insts, bool own_vbo)
     if (batch->inst[v] == NULL) {
       /* for now all VertexBuffers must have same vertex_len */
       if (batch->inst[0]) {
-        /* Allow for different size of vertex buf (will choose the smallest
-         * number of verts). */
+        /* Allow for different size of vertex buffer (will choose the smallest number of verts). */
         // BLI_assert(insts->vertex_len == batch->inst[0]->vertex_len);
       }
 
@@ -225,87 +225,6 @@ void GPU_batch_set_shader(GPUBatch *batch, GPUShader *shader)
 {
   batch->shader = shader;
   GPU_shader_bind(batch->shader);
-}
-
-#define GET_UNIFORM \
-  const GPUShaderInput *uniform = GPU_shaderinterface_uniform(batch->shader->interface, name); \
-  BLI_assert(uniform);
-
-void GPU_batch_uniform_1i(GPUBatch *batch, const char *name, int value)
-{
-  GET_UNIFORM
-  GPU_shader_uniform_int(batch->shader, uniform->location, value);
-}
-
-void GPU_batch_uniform_1b(GPUBatch *batch, const char *name, bool value)
-{
-  GPU_batch_uniform_1i(batch, name, value ? GL_TRUE : GL_FALSE);
-}
-
-void GPU_batch_uniform_2f(GPUBatch *batch, const char *name, float x, float y)
-{
-  const float data[2] = {x, y};
-  GPU_batch_uniform_2fv(batch, name, data);
-}
-
-void GPU_batch_uniform_3f(GPUBatch *batch, const char *name, float x, float y, float z)
-{
-  const float data[3] = {x, y, z};
-  GPU_batch_uniform_3fv(batch, name, data);
-}
-
-void GPU_batch_uniform_4f(GPUBatch *batch, const char *name, float x, float y, float z, float w)
-{
-  const float data[4] = {x, y, z, w};
-  GPU_batch_uniform_4fv(batch, name, data);
-}
-
-void GPU_batch_uniform_1f(GPUBatch *batch, const char *name, float x)
-{
-  GET_UNIFORM
-  GPU_shader_uniform_float(batch->shader, uniform->location, x);
-}
-
-void GPU_batch_uniform_2fv(GPUBatch *batch, const char *name, const float data[2])
-{
-  GET_UNIFORM
-  GPU_shader_uniform_vector(batch->shader, uniform->location, 2, 1, data);
-}
-
-void GPU_batch_uniform_3fv(GPUBatch *batch, const char *name, const float data[3])
-{
-  GET_UNIFORM
-  GPU_shader_uniform_vector(batch->shader, uniform->location, 3, 1, data);
-}
-
-void GPU_batch_uniform_4fv(GPUBatch *batch, const char *name, const float data[4])
-{
-  GET_UNIFORM
-  GPU_shader_uniform_vector(batch->shader, uniform->location, 4, 1, data);
-}
-
-void GPU_batch_uniform_2fv_array(GPUBatch *batch,
-                                 const char *name,
-                                 const int len,
-                                 const float *data)
-{
-  GET_UNIFORM
-  GPU_shader_uniform_vector(batch->shader, uniform->location, 2, len, data);
-}
-
-void GPU_batch_uniform_4fv_array(GPUBatch *batch,
-                                 const char *name,
-                                 const int len,
-                                 const float *data)
-{
-  GET_UNIFORM
-  GPU_shader_uniform_vector(batch->shader, uniform->location, 4, len, data);
-}
-
-void GPU_batch_uniform_mat4(GPUBatch *batch, const char *name, const float data[4][4])
-{
-  GET_UNIFORM
-  GPU_shader_uniform_vector(batch->shader, uniform->location, 16, 1, (const float *)data);
 }
 
 /** \} */
@@ -359,20 +278,6 @@ void GPU_batch_draw_advanced(GPUBatch *batch, int v_first, int v_count, int i_fi
   }
 
   static_cast<Batch *>(batch)->draw(v_first, v_count, i_first, i_count);
-}
-
-/* just draw some vertices and let shader place them where we want. */
-void GPU_draw_primitive(GPUPrimType prim_type, int v_count)
-{
-  /* we cannot draw without vao ... annoying ... */
-  glBindVertexArray(GPU_vao_default());
-
-  GLenum type = convert_prim_type_to_gl(prim_type);
-  glDrawArrays(type, 0, v_count);
-
-  /* Performance hog if you are drawing with the same vao multiple time.
-   * Only activate for debugging.*/
-  // glBindVertexArray(0);
 }
 
 /** \} */

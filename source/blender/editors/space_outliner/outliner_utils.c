@@ -37,6 +37,7 @@
 
 #include "ED_armature.h"
 #include "ED_outliner.h"
+#include "ED_screen.h"
 
 #include "UI_interface.h"
 #include "UI_view2d.h"
@@ -112,7 +113,7 @@ TreeElement *outliner_find_item_at_y(const SpaceOutliner *space_outliner,
 
 static TreeElement *outliner_find_item_at_x_in_row_recursive(const TreeElement *parent_te,
                                                              float view_co_x,
-                                                             bool *r_merged)
+                                                             bool *row_merged)
 {
   TreeElement *child_te = parent_te->subtree.first;
 
@@ -124,13 +125,13 @@ static TreeElement *outliner_find_item_at_x_in_row_recursive(const TreeElement *
       return child_te;
     }
     if ((child_te->flag & TE_ICONROW_MERGED) && over_element) {
-      if (r_merged) {
-        *r_merged = true;
+      if (row_merged) {
+        *row_merged = true;
       }
       return child_te;
     }
 
-    TreeElement *te = outliner_find_item_at_x_in_row_recursive(child_te, view_co_x, r_merged);
+    TreeElement *te = outliner_find_item_at_x_in_row_recursive(child_te, view_co_x, row_merged);
     if (te != child_te) {
       return te;
     }
@@ -151,11 +152,11 @@ static TreeElement *outliner_find_item_at_x_in_row_recursive(const TreeElement *
 TreeElement *outliner_find_item_at_x_in_row(const SpaceOutliner *space_outliner,
                                             const TreeElement *parent_te,
                                             float view_co_x,
-                                            bool *r_merged)
+                                            bool *row_merged)
 {
   /* if parent_te is opened, it doesn't show children in row */
   if (!TSELEM_OPEN(TREESTORE(parent_te), space_outliner)) {
-    return outliner_find_item_at_x_in_row_recursive(parent_te, view_co_x, r_merged);
+    return outliner_find_item_at_x_in_row_recursive(parent_te, view_co_x, row_merged);
   }
 
   return (TreeElement *)parent_te;
@@ -452,6 +453,23 @@ void outliner_scroll_view(ARegion *region, int delta_y)
     offset = y_min - region->v2d.cur.ymin;
     region->v2d.cur.ymax += offset;
     region->v2d.cur.ymin += offset;
+  }
+}
+
+/**
+ * The outliner should generally use #ED_region_tag_redraw_no_rebuild() to avoid unnecessary tree
+ * rebuilds. If elements are open or closed, we may still have to rebuild.
+ * Upon changing the open/closed state, call this to avoid rebuilds if possible.
+ */
+void outliner_tag_redraw_avoid_rebuild_on_open_change(const SpaceOutliner *space_outliner,
+                                                      ARegion *region)
+{
+  /* Avoid rebuild if possible. */
+  if (outliner_mode_requires_always_rebuild(space_outliner)) {
+    ED_region_tag_redraw(region);
+  }
+  else {
+    ED_region_tag_redraw_no_rebuild(region);
   }
 }
 

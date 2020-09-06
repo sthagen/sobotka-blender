@@ -228,7 +228,7 @@ static int sculpt_color_filter_modal(bContext *C, wmOperator *op, const wmEvent 
     return OPERATOR_RUNNING_MODAL;
   }
 
-  float len = event->prevclickx - event->mval[0];
+  const float len = event->prevclickx - event->x;
   filter_strength = filter_strength * -len * 0.001f;
 
   float fill_color[3];
@@ -289,7 +289,7 @@ static int sculpt_color_filter_invoke(bContext *C, wmOperator *op, const wmEvent
     return OPERATOR_CANCELLED;
   }
 
-  SCULPT_filter_cache_init(ob, sd, SCULPT_UNDO_COLOR);
+  SCULPT_filter_cache_init(C, ob, sd, SCULPT_UNDO_COLOR);
 
   WM_event_add_modal_handler(C, op);
   return OPERATOR_RUNNING_MODAL;

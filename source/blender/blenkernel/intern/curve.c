@@ -146,6 +146,12 @@ IDTypeInfo IDType_ID_CU = {
     .free_data = curve_free_data,
     .make_local = NULL,
     .foreach_id = curve_foreach_id,
+    .foreach_cache = NULL,
+
+    .blend_write = NULL,
+    .blend_read_data = NULL,
+    .blend_read_lib = NULL,
+    .blend_read_expand = NULL,
 };
 
 static int cu_isectLL(const float v1[3],
@@ -262,7 +268,7 @@ ListBase *BKE_curve_editNurbs_get(Curve *cu)
   return NULL;
 }
 
-short BKE_curve_type_get(Curve *cu)
+short BKE_curve_type_get(const Curve *cu)
 {
   Nurb *nu;
   int type = cu->type;
@@ -3315,8 +3321,9 @@ static void calchandlesNurb_intern(Nurb *nu, eBezTriple_Flag handle_sel_flag, bo
   }
 }
 
-/* A utility function for allocating a number of arrays of the same length
- * with easy error checking and deallocation, and an easy way to add or remove
+/**
+ * A utility function for allocating a number of arrays of the same length
+ * with easy error checking and de-allocation, and an easy way to add or remove
  * arrays that are processed in this way when changing code.
  *
  * floats, chars: NULL-terminated arrays of pointers to array pointers that need to be allocated.
@@ -3841,15 +3848,15 @@ static bool is_free_auto_point(BezTriple *bezt)
   return BEZT_IS_AUTOH(bezt) && bezt->f5 == HD_AUTOTYPE_NORMAL;
 }
 
-void BKE_nurb_handle_smooth_fcurve(BezTriple *bezt, int total, bool cycle)
+void BKE_nurb_handle_smooth_fcurve(BezTriple *bezt, int total, bool cyclic)
 {
   /* ignore cyclic extrapolation if end points are locked */
-  cycle = cycle && is_free_auto_point(&bezt[0]) && is_free_auto_point(&bezt[total - 1]);
+  cyclic = cyclic && is_free_auto_point(&bezt[0]) && is_free_auto_point(&bezt[total - 1]);
 
   /* if cyclic, try to find a sequence break point */
   int search_base = 0;
 
-  if (cycle) {
+  if (cyclic) {
     for (int i = 1; i < total - 1; i++) {
       if (!is_free_auto_point(&bezt[i])) {
         search_base = i;
@@ -3859,7 +3866,7 @@ void BKE_nurb_handle_smooth_fcurve(BezTriple *bezt, int total, bool cycle)
 
     /* all points of the curve are freely changeable auto handles - solve as full cycle */
     if (search_base == 0) {
-      bezier_handle_calc_smooth_fcurve(bezt, total, 0, total, cycle);
+      bezier_handle_calc_smooth_fcurve(bezt, total, 0, total, cyclic);
       return;
     }
   }
@@ -3870,13 +3877,13 @@ void BKE_nurb_handle_smooth_fcurve(BezTriple *bezt, int total, bool cycle)
 
   for (int i = 1, j = start + 1; i < total; i++, j++) {
     /* in cyclic mode: jump from last to first point when necessary */
-    if (j == total - 1 && cycle) {
+    if (j == total - 1 && cyclic) {
       j = 0;
     }
 
     /* non auto handle closes the list (we come here at least for the last handle, see above) */
     if (!is_free_auto_point(&bezt[j])) {
-      bezier_handle_calc_smooth_fcurve(bezt, total, start, count + 1, cycle);
+      bezier_handle_calc_smooth_fcurve(bezt, total, start, count + 1, cyclic);
       start = j;
       count = 1;
     }
@@ -3886,7 +3893,7 @@ void BKE_nurb_handle_smooth_fcurve(BezTriple *bezt, int total, bool cycle)
   }
 
   if (count > 1) {
-    bezier_handle_calc_smooth_fcurve(bezt, total, start, count, cycle);
+    bezier_handle_calc_smooth_fcurve(bezt, total, start, count, cyclic);
   }
 }
 

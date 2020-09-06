@@ -30,14 +30,16 @@
 #include "BLI_set.hh"
 #include "BLI_vector.hh"
 
-#include "glew-mx.h"
+#include "gl_state.hh"
 
-#include "gl_batch.hh"
+#include "glew-mx.h"
 
 #include <mutex>
 
 namespace blender {
 namespace gpu {
+
+class GLVaoCache;
 
 class GLSharedOrphanLists {
  public:
@@ -51,13 +53,13 @@ class GLSharedOrphanLists {
   void orphans_clear(void);
 };
 
-struct GLContext : public GPUContext {
+class GLContext : public GPUContext {
+ public:
+  /** Used for debugging purpose. Bitflags of all bound slots. */
+  uint16_t bound_ubo_slots;
+
   /* TODO(fclem) these needs to become private. */
  public:
-  /** Default VAO for procedural draw calls. */
-  GLuint default_vao_;
-  /** Default framebuffer object for some GL implementation. */
-  GLuint default_framebuffer_;
   /** VBO for missing vertex attrib binding. Avoid undefined behavior on some implementation. */
   GLuint default_attr_vbo_;
   /**
@@ -78,8 +80,16 @@ struct GLContext : public GPUContext {
   GLContext(void *ghost_window, GLSharedOrphanLists &shared_orphan_list);
   ~GLContext();
 
+  static void check_error(const char *info);
+
   void activate(void) override;
   void deactivate(void) override;
+
+  static inline GLStateManager *state_manager_active_get()
+  {
+    GLContext *ctx = static_cast<GLContext *>(GPU_context_active_get());
+    return static_cast<GLStateManager *>(ctx->state_manager);
+  };
 
   /* TODO(fclem) these needs to become private. */
  public:
@@ -90,8 +100,6 @@ struct GLContext : public GPUContext {
   void fbo_free(GLuint fbo_id);
   void vao_cache_register(GLVaoCache *cache);
   void vao_cache_unregister(GLVaoCache *cache);
-  void framebuffer_register(struct GPUFrameBuffer *fb);
-  void framebuffer_unregister(struct GPUFrameBuffer *fb);
 };
 
 }  // namespace gpu

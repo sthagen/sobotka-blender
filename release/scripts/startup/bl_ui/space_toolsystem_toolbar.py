@@ -1255,12 +1255,45 @@ class _defs_sculpt:
         )
 
     @ToolDef.from_fn
+    def face_set_box():
+        def draw_settings(_context, layout, tool):
+            props = tool.operator_properties("sculpt.face_set_box_gesture")
+            layout.prop(props, "use_front_faces_only", expand=False)
+
+        return dict(
+            idname="builtin.box_face_set",
+            label="Box Face Set",
+            icon="ops.sculpt.border_face_set",
+            widget=None,
+            keymap=(),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
+    def face_set_lasso():
+        def draw_settings(_context, layout, tool):
+            props = tool.operator_properties("sculpt.face_set_lasso_gesture")
+            layout.prop(props, "use_front_faces_only", expand=False)
+
+        return dict(
+            idname="builtin.lasso_face_set",
+            label="Lasso Face Set",
+            icon="ops.sculpt.lasso_face_set",
+            widget=None,
+            keymap=(),
+            draw_settings=draw_settings,
+        )
+
+
+    @ToolDef.from_fn
     def mesh_filter():
         def draw_settings(_context, layout, tool):
             props = tool.operator_properties("sculpt.mesh_filter")
             layout.prop(props, "type", expand=False)
             layout.prop(props, "strength")
-            layout.prop(props, "deform_axis")
+            row = layout.row(align=True)
+            row.prop(props, "deform_axis")
+            layout.prop(props, "orientation", expand=False)
             layout.prop(props, "use_face_sets")
             if props.type == 'SURFACE_SMOOTH':
                 layout.prop(props, "surface_smooth_shape_preservation", expand=False)
@@ -1285,6 +1318,9 @@ class _defs_sculpt:
             props = tool.operator_properties("sculpt.cloth_filter")
             layout.prop(props, "type", expand=False)
             layout.prop(props, "strength")
+            row = layout.row(align=True)
+            row.prop(props, "force_axis")
+            layout.prop(props, "orientation", expand=False)
             layout.prop(props, "cloth_mass")
             layout.prop(props, "cloth_damping")
             layout.prop(props, "use_face_sets")
@@ -2590,6 +2626,10 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
             (
                 _defs_sculpt.mask_border,
                 _defs_sculpt.mask_lasso,
+            ),
+            (
+                _defs_sculpt.face_set_box,
+                _defs_sculpt.face_set_lasso,
             ),
             _defs_sculpt.hide_border,
             None,

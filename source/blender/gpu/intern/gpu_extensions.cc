@@ -62,6 +62,7 @@
 
 static struct GPUGlobal {
   GLint maxtexsize;
+  GLint maxtex3dsize;
   GLint maxtexlayers;
   GLint maxcubemapsize;
   GLint maxtextures;
@@ -71,12 +72,10 @@ static struct GPUGlobal {
   GLint maxubosize;
   GLint maxubobinds;
   int samples_color_texture_max;
-  float line_width_range[2];
   /* workaround for different calculation of dfdy factors on GPUs. Some GPUs/drivers
    * calculate dfdy in shader differently when drawing to an off-screen buffer. First
    * number is factor on screen and second is off-screen */
   float dfdyfactors[2];
-  float max_anisotropy;
   /* Some Intel drivers have limited support for `GLEW_ARB_base_instance` so in
    * these cases it is best to indicate that it is not supported. See T67951 */
   bool glew_arb_base_instance_is_supported;
@@ -109,7 +108,7 @@ static void gpu_detect_mip_render_workaround(void)
   float *source_pix = (float *)MEM_callocN(sizeof(float[4][6]) * cube_size * cube_size, __func__);
   float clear_color[4] = {1.0f, 0.5f, 0.0f, 0.0f};
 
-  GPUTexture *tex = GPU_texture_create_cube(cube_size, GPU_RGBA16F, source_pix, NULL);
+  GPUTexture *tex = GPU_texture_create_cube(__func__, cube_size, 2, GPU_RGBA16F, source_pix);
   MEM_freeN(source_pix);
 
   GPU_texture_bind(tex, 0);
@@ -118,7 +117,7 @@ static void gpu_detect_mip_render_workaround(void)
   glTexParameteri(GPU_texture_target(tex), GL_TEXTURE_MAX_LEVEL, 0);
   GPU_texture_unbind(tex);
 
-  GPUFrameBuffer *fb = GPU_framebuffer_create();
+  GPUFrameBuffer *fb = GPU_framebuffer_create(__func__);
   GPU_framebuffer_texture_attach(fb, tex, 0, 1);
   GPU_framebuffer_bind(fb);
   GPU_framebuffer_clear_color(fb, clear_color);
@@ -137,6 +136,11 @@ static void gpu_detect_mip_render_workaround(void)
 int GPU_max_texture_size(void)
 {
   return GG.maxtexsize;
+}
+
+int GPU_max_texture_3d_size(void)
+{
+  return GG.maxtex3dsize;
 }
 
 int GPU_max_texture_layers(void)
@@ -164,11 +168,6 @@ int GPU_max_textures_vert(void)
   return GG.maxtexturesvert;
 }
 
-float GPU_max_texture_anisotropy(void)
-{
-  return GG.max_anisotropy;
-}
-
 int GPU_max_color_texture_samples(void)
 {
   return GG.samples_color_texture_max;
@@ -187,11 +186,6 @@ int GPU_max_ubo_binds(void)
 int GPU_max_ubo_size(void)
 {
   return GG.maxubosize;
-}
-
-float GPU_max_line_width(void)
-{
-  return GG.line_width_range[1];
 }
 
 void GPU_get_dfdy_factors(float fac[2])
@@ -261,20 +255,12 @@ void gpu_extensions_init(void)
   glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &GG.maxtextures);
 
   glGetIntegerv(GL_MAX_TEXTURE_SIZE, &GG.maxtexsize);
+  glGetIntegerv(GL_MAX_3D_TEXTURE_SIZE, &GG.maxtex3dsize);
   glGetIntegerv(GL_MAX_ARRAY_TEXTURE_LAYERS, &GG.maxtexlayers);
   glGetIntegerv(GL_MAX_CUBE_MAP_TEXTURE_SIZE, &GG.maxcubemapsize);
 
-  if (GLEW_EXT_texture_filter_anisotropic) {
-    glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &GG.max_anisotropy);
-  }
-  else {
-    GG.max_anisotropy = 1.0f;
-  }
-
   glGetIntegerv(GL_MAX_FRAGMENT_UNIFORM_BLOCKS, &GG.maxubobinds);
   glGetIntegerv(GL_MAX_UNIFORM_BLOCK_SIZE, &GG.maxubosize);
-
-  glGetFloatv(GL_ALIASED_LINE_WIDTH_RANGE, GG.line_width_range);
 
   glGetIntegerv(GL_MAX_COLOR_TEXTURE_SAMPLES, &GG.samples_color_texture_max);
 
@@ -407,13 +393,11 @@ void gpu_extensions_init(void)
   }
 
   GPU_invalid_tex_init();
-  GPU_samplers_init();
 }
 
 void gpu_extensions_exit(void)
 {
   GPU_invalid_tex_free();
-  GPU_samplers_free();
 }
 
 bool GPU_mem_stats_supported(void)

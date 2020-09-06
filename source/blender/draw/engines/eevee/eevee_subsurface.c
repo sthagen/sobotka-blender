@@ -71,7 +71,7 @@ void EEVEE_subsurface_draw_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)
     /* NOTE : we need another stencil because the stencil buffer is on the same texture
      * as the depth buffer we are sampling from. This could be avoided if the stencil is
      * a separate texture but that needs OpenGL 4.4 or ARB_texture_stencil8.
-     * OR OpenGL 4.3 / ARB_ES3_compatibility if using a renderbuffer instead */
+     * OR OpenGL 4.3 / ARB_ES3_compatibility if using a render-buffer instead. */
     effects->sss_stencil = DRW_texture_pool_query_2d(
         fs_size[0], fs_size[1], GPU_DEPTH24_STENCIL8, &draw_engine_eevee_type);
     effects->sss_blur = DRW_texture_pool_query_2d(
@@ -212,7 +212,7 @@ void EEVEE_subsurface_add_pass(EEVEE_ViewLayerData *sldata,
   GPUTexture **depth_src = GPU_depth_blitting_workaround() ? &effects->sss_stencil : &dtxl->depth;
 
   struct GPUTexture *sss_tex_profile = NULL;
-  struct GPUUniformBuffer *sss_profile = GPU_material_sss_profile_get(
+  struct GPUUniformBuf *sss_profile = GPU_material_sss_profile_get(
       gpumat, stl->effects->sss_sample_count, &sss_tex_profile);
 
   if (!sss_profile) {

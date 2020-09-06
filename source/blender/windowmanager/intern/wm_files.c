@@ -121,7 +121,8 @@
 #include "RE_engine.h"
 
 #ifdef WITH_PYTHON
-#  include "BPY_extern.h"
+#  include "BPY_extern_python.h"
+#  include "BPY_extern_run.h"
 #endif
 
 #include "DEG_depsgraph.h"
@@ -579,14 +580,14 @@ static void wm_file_read_post(bContext *C,
       if (use_userdef || reset_app_template) {
         /* Only run when we have a template path found. */
         if (BKE_appdir_app_template_any()) {
-          BPY_execute_string(
+          BPY_run_string_eval(
               C, (const char *[]){"bl_app_template_utils", NULL}, "bl_app_template_utils.reset()");
           reset_all = true;
         }
       }
       if (reset_all) {
         /* sync addons, these may have changed from the defaults */
-        BPY_execute_string(C, (const char *[]){"addon_utils", NULL}, "addon_utils.reset_all()");
+        BPY_run_string_eval(C, (const char *[]){"addon_utils", NULL}, "addon_utils.reset_all()");
       }
       if (use_data) {
         BPY_python_reset(C);
@@ -923,7 +924,7 @@ void wm_homefile_read(bContext *C,
        *
        * Note that this fits into 'wm_file_read_pre' function but gets messy
        * since we need to know if 'reset_app_template' is true. */
-      BPY_execute_string(C, (const char *[]){"addon_utils", NULL}, "addon_utils.disable_all()");
+      BPY_run_string_eval(C, (const char *[]){"addon_utils", NULL}, "addon_utils.disable_all()");
     }
 #endif /* WITH_PYTHON */
   }
@@ -1575,7 +1576,7 @@ void wm_autosave_location(char *filepath)
    * Blender installed on D:\ drive, D:\ drive has D:\tmp\
    * Now, BLI_exists() will find '/tmp/' exists, but
    * BLI_make_file_string will create string that has it most likely on C:\
-   * through get_default_root().
+   * through BLI_windows_get_default_root_dir().
    * If there is no C:\tmp autosave fails. */
   if (!BLI_exists(BKE_tempdir_base())) {
     savedir = BKE_appdir_folder_id_create(BLENDER_USER_AUTOSAVE, NULL);
@@ -1981,7 +1982,10 @@ void WM_OT_read_history(wmOperatorType *ot)
 
 static int wm_homefile_read_exec(bContext *C, wmOperator *op)
 {
-  const bool use_factory_settings = (STREQ(op->type->idname, "WM_OT_read_factory_settings"));
+  const bool use_factory_startup_and_userdef = STREQ(op->type->idname,
+                                                     "WM_OT_read_factory_settings");
+  const bool use_factory_settings = use_factory_startup_and_userdef ||
+                                    RNA_boolean_get(op->ptr, "use_factory_startup");
   bool use_userdef = false;
   char filepath_buf[FILE_MAX];
   const char *filepath = NULL;
@@ -2006,10 +2010,12 @@ static int wm_homefile_read_exec(bContext *C, wmOperator *op)
     }
   }
   else {
-    /* always load UI for factory settings (prefs will re-init) */
-    G.fileflags &= ~G_FILE_NO_UI;
-    /* Always load preferences with factory settings. */
-    use_userdef = true;
+    if (use_factory_startup_and_userdef) {
+      /* always load UI for factory settings (prefs will re-init) */
+      G.fileflags &= ~G_FILE_NO_UI;
+      /* Always load preferences with factory settings. */
+      use_userdef = true;
+    }
   }
 
   char app_template_buf[sizeof(U.app_template)];
@@ -2124,6 +2130,12 @@ void WM_OT_read_homefile(wmOperatorType *ot)
 
   /* So the splash can be kept open after loading a file (for templates). */
   prop = RNA_def_boolean(ot->srna, "use_splash", false, "Splash", "");
+  RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
+
+  /* So scripts can load factory-startup without resetting preferences
+   * (which has other implications such as reloading all add-ons).
+   * Match naming for `--factory-startup` command line argument. */
+  prop = RNA_def_boolean(ot->srna, "use_factory_startup", false, "Factory Startup", "");
   RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 
   read_homefile_props(ot);
