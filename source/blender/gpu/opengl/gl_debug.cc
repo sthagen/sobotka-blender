@@ -122,7 +122,7 @@ void init_gl_callbacks(void)
   char msg[256] = "";
   const char format[] = "Successfully hooked OpenGL debug callback using %s";
 
-  if (GLEW_VERSION_4_3 || GLEW_KHR_debug) {
+  if (GLContext::debug_layer_support) {
     SNPRINTF(msg, format, GLEW_VERSION_4_3 ? "OpenGL 4.3" : "KHR_debug extension");
     glEnable(GL_DEBUG_OUTPUT);
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
@@ -197,7 +197,7 @@ void check_gl_resources(const char *info)
     return;
   }
 
-  GLContext *ctx = static_cast<GLContext *>(GPU_context_active_get());
+  GLContext *ctx = GLContext::get();
   ShaderInterface *interface = ctx->shader->interface;
   /* NOTE: This only check binding. To be valid, the bound ubo needs to
    * be big enough to feed the data range the shader awaits. */
@@ -207,7 +207,7 @@ void check_gl_resources(const char *info)
   /* NOTE: This only check binding. To be valid, the bound texture needs to
    * be the same format/target the shader expects. */
   uint64_t tex_needed = interface->enabled_tex_mask_;
-  tex_needed &= ~ctx->state_manager_active_get()->bound_texture_slots();
+  tex_needed &= ~GLContext::state_manager_active_get()->bound_texture_slots();
 
   if (ubo_needed == 0 && tex_needed == 0) {
     return;
@@ -236,9 +236,9 @@ void check_gl_resources(const char *info)
   }
 }
 
-void raise_gl_error(const char *msg)
+void raise_gl_error(const char *info)
 {
-  debug_callback(0, GL_DEBUG_TYPE_ERROR, 0, GL_DEBUG_SEVERITY_HIGH, 0, msg, NULL);
+  debug_callback(0, GL_DEBUG_TYPE_ERROR, 0, GL_DEBUG_SEVERITY_HIGH, 0, info, NULL);
 }
 
 /** \} */
