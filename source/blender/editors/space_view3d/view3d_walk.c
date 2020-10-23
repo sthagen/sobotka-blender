@@ -337,7 +337,7 @@ static void drawWalkPixel(const struct bContext *UNUSED(C), ARegion *region, voi
 
   immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
 
-  immUniformThemeColor3(TH_VIEW_OVERLAY);
+  immUniformThemeColorAlpha(TH_VIEW_OVERLAY, 1.0f);
 
   immBegin(GPU_PRIM_LINES, 8);
 
@@ -1450,7 +1450,7 @@ static int walk_modal(bContext *C, wmOperator *op, const wmEvent *event)
       WM_event_add_notifier(C, NC_OBJECT | ND_TRANSFORM, walk_object);
     }
 
-    // too frequent, commented with NDOF_WALK_DRAW_TOOMUCH for now
+    /* too frequent, commented with NDOF_WALK_DRAW_TOOMUCH for now */
     // puts("redraw!");
     ED_region_tag_redraw(CTX_wm_region(C));
   }

@@ -444,15 +444,6 @@ RenderResult *render_result_new(Render *re,
       if (view_layer->passflag & SCE_PASS_SUBSURFACE_COLOR) {
         RENDER_LAYER_ADD_PASS_SAFE(rr, rl, 3, RE_PASSNAME_SUBSURFACE_COLOR, view, "RGB");
       }
-      if (view_layer->eevee.render_passes & EEVEE_RENDER_PASS_BLOOM) {
-        RENDER_LAYER_ADD_PASS_SAFE(rr, rl, 3, RE_PASSNAME_BLOOM, view, "RGB");
-      }
-      if (view_layer->eevee.render_passes & EEVEE_RENDER_PASS_VOLUME_SCATTER) {
-        RENDER_LAYER_ADD_PASS_SAFE(rr, rl, 3, RE_PASSNAME_VOLUME_SCATTER, view, "RGB");
-      }
-      if (view_layer->eevee.render_passes & EEVEE_RENDER_PASS_VOLUME_TRANSMITTANCE) {
-        RENDER_LAYER_ADD_PASS_SAFE(rr, rl, 3, RE_PASSNAME_VOLUME_TRANSMITTANCE, view, "RGB");
-      }
 #undef RENDER_LAYER_ADD_PASS_SAFE
     }
   }
@@ -579,8 +570,10 @@ static int passtype_from_name(const char *name)
   int len = BLI_str_partition(name, delim, &sep, &suf);
 
 #define CHECK_PASS(NAME) \
-  if (STREQLEN(name, RE_PASSNAME_##NAME, len)) \
-  return SCE_PASS_##NAME
+  if (STREQLEN(name, RE_PASSNAME_##NAME, len)) { \
+    return SCE_PASS_##NAME; \
+  } \
+  ((void)0)
 
   CHECK_PASS(COMBINED);
   CHECK_PASS(Z);

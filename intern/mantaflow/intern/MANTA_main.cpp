@@ -118,6 +118,7 @@ MANTA::MANTA(int *res, FluidModifierData *fmd) : mCurrentID(++solverID)
   mFuelIn = nullptr;
   mReactIn = nullptr;
   mEmissionIn = nullptr;
+  mPressure = nullptr;
 
   /* Smoke high res grids. */
   mDensityHigh = nullptr;
@@ -739,11 +740,13 @@ void MANTA::initializeRNAMap(FluidModifierData *fmd)
   else if (fds->openvdb_compression == VDB_COMPRESSION_BLOSC)
     vdbCompressionMethod = "Compression_Blosc";
 
-  string vdbPrecisionHalf = "True";
-  if (fds->openvdb_data_depth == VDB_PRECISION_HALF_FLOAT)
-    vdbPrecisionHalf = "True";
-  else if (fds->openvdb_data_depth == VDB_PRECISION_FULL_FLOAT)
-    vdbPrecisionHalf = "False";
+  string vdbPrecisionHalf = "Precision_Half";
+  if (fds->openvdb_data_depth == VDB_PRECISION_FULL_FLOAT)
+    vdbPrecisionHalf = "Precision_Full";
+  else if (fds->openvdb_data_depth == VDB_PRECISION_HALF_FLOAT)
+    vdbPrecisionHalf = "Precision_Half";
+  else if (fds->openvdb_data_depth == VDB_PRECISION_MINI_FLOAT)
+    vdbPrecisionHalf = "Precision_Mini";
 
   mRNAMap["USING_SMOKE"] = getBooleanString(fds->type == FLUID_DOMAIN_TYPE_GAS);
   mRNAMap["USING_LIQUID"] = getBooleanString(fds->type == FLUID_DOMAIN_TYPE_LIQUID);
@@ -842,6 +845,7 @@ void MANTA::initializeRNAMap(FluidModifierData *fmd)
   mRNAMap["PARTICLE_MAXIMUM"] = to_string(fds->particle_maximum);
   mRNAMap["PARTICLE_RADIUS"] = to_string(fds->particle_radius);
   mRNAMap["FRACTIONS_THRESHOLD"] = to_string(fds->fractions_threshold);
+  mRNAMap["FRACTIONS_DISTANCE"] = to_string(fds->fractions_distance);
   mRNAMap["MESH_CONCAVE_UPPER"] = to_string(fds->mesh_concave_upper);
   mRNAMap["MESH_CONCAVE_LOWER"] = to_string(fds->mesh_concave_lower);
   mRNAMap["MESH_PARTICLE_RADIUS"] = to_string(fds->mesh_particle_radius);
@@ -906,7 +910,6 @@ void MANTA::initializeRNAMap(FluidModifierData *fmd)
   mRNAMap["NAME_OBVEL_Z"] = FLUID_NAME_OBVEL_Z;
   mRNAMap["NAME_FRACTIONS"] = FLUID_NAME_FRACTIONS;
   mRNAMap["NAME_INVELC"] = FLUID_NAME_INVELC;
-  mRNAMap["NAME_INVEL"] = FLUID_NAME_INVEL;
   mRNAMap["NAME_INVEL_X"] = FLUID_NAME_INVEL_X;
   mRNAMap["NAME_INVEL_Y"] = FLUID_NAME_INVEL_Y;
   mRNAMap["NAME_INVEL_Z"] = FLUID_NAME_INVEL_Z;
@@ -2020,6 +2023,7 @@ void MANTA::updatePointers(FluidModifierData *fmd, bool flush)
   mForceX = (smoke || liquid) ? getPointer<float>("x_force" + s_ext, func) : nullptr;
   mForceY = (smoke || liquid) ? getPointer<float>("y_force" + s_ext, func) : nullptr;
   mForceZ = (smoke || liquid) ? getPointer<float>("z_force" + s_ext, func) : nullptr;
+  mPressure = (smoke || liquid) ? getPointer<float>("pressure" + s_ext, func) : nullptr;
 
   /* Outflow. */
   mPhiOutIn = (outflow) ? getPointer<float>("phiOutIn" + s_ext, func) : nullptr;

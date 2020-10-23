@@ -41,6 +41,10 @@ extern "C" {
 #define MAX_SOCKET 512
 
 struct ARegion;
+struct BlendDataReader;
+struct BlendExpander;
+struct BlendLibReader;
+struct BlendWriter;
 struct ColorManagedDisplaySettings;
 struct ColorManagedViewSettings;
 struct FreestyleLineStyle;
@@ -250,23 +254,23 @@ typedef struct bNodeType {
    * \note Used as a fallback when #bNode.label isn't set.
    */
   void (*labelfunc)(struct bNodeTree *ntree, struct bNode *node, char *label, int maxlen);
-  /// Optional custom resize handle polling.
+  /** Optional custom resize handle polling. */
   int (*resize_area_func)(struct bNode *node, int x, int y);
-  /// Optional selection area polling.
+  /** Optional selection area polling. */
   int (*select_area_func)(struct bNode *node, int x, int y);
-  /// Optional tweak area polling (for grabbing).
+  /** Optional tweak area polling (for grabbing). */
   int (*tweak_area_func)(struct bNode *node, int x, int y);
 
-  /// Called when the node is updated in the editor.
+  /** Called when the node is updated in the editor. */
   void (*updatefunc)(struct bNodeTree *ntree, struct bNode *node);
-  /// Check and update if internal ID data has changed.
+  /** Check and update if internal ID data has changed. */
   void (*group_update_func)(struct bNodeTree *ntree, struct bNode *node);
 
-  /// Initialize a new node instance of this type after creation.
+  /** Initialize a new node instance of this type after creation. */
   void (*initfunc)(struct bNodeTree *ntree, struct bNode *node);
-  /// Free the node instance.
+  /** Free the node instance. */
   void (*freefunc)(struct bNode *node);
-  /// Make a copy of the node instance.
+  /** Make a copy of the node instance. */
   void (*copyfunc)(struct bNodeTree *dest_ntree,
                    struct bNode *dest_node,
                    const struct bNode *src_node);
@@ -452,6 +456,11 @@ void ntreeNodeFlagSet(const bNodeTree *ntree, const int flag, const bool enable)
 struct bNodeTree *ntreeLocalize(struct bNodeTree *ntree);
 void ntreeLocalSync(struct bNodeTree *localtree, struct bNodeTree *ntree);
 void ntreeLocalMerge(struct Main *bmain, struct bNodeTree *localtree, struct bNodeTree *ntree);
+
+void ntreeBlendWrite(struct BlendWriter *writer, struct bNodeTree *ntree);
+void ntreeBlendReadData(struct BlendDataReader *reader, struct bNodeTree *ntree);
+void ntreeBlendReadLib(struct BlendLibReader *reader, struct bNodeTree *ntree);
+void ntreeBlendReadExpand(struct BlendExpander *expander, struct bNodeTree *ntree);
 
 /** \} */
 
@@ -1302,7 +1311,7 @@ struct bNodeTreeExec *ntreeTexBeginExecTree(struct bNodeTree *ntree);
 void ntreeTexEndExecTree(struct bNodeTreeExec *exec);
 int ntreeTexExecTree(struct bNodeTree *ntree,
                      struct TexResult *target,
-                     float co[3],
+                     const float co[3],
                      float dxt[3],
                      float dyt[3],
                      int osatex,
@@ -1312,27 +1321,6 @@ int ntreeTexExecTree(struct bNodeTree *ntree,
                      int cfra,
                      int preview,
                      struct MTex *mtex);
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Simulation Nodes
- * \{ */
-
-#define SIM_NODE_PARTICLE_SIMULATION 1000
-#define SIM_NODE_FORCE 1001
-#define SIM_NODE_SET_PARTICLE_ATTRIBUTE 1002
-#define SIM_NODE_PARTICLE_BIRTH_EVENT 1003
-#define SIM_NODE_PARTICLE_TIME_STEP_EVENT 1004
-#define SIM_NODE_EXECUTE_CONDITION 1005
-#define SIM_NODE_MULTI_EXECUTE 1006
-#define SIM_NODE_PARTICLE_MESH_EMITTER 1007
-#define SIM_NODE_PARTICLE_MESH_COLLISION_EVENT 1008
-#define SIM_NODE_EMIT_PARTICLES 1009
-#define SIM_NODE_TIME 1010
-#define SIM_NODE_PARTICLE_ATTRIBUTE 1011
-#define SIM_NODE_AGE_REACHED_EVENT 1012
-#define SIM_NODE_KILL_PARTICLE 1013
-
 /** \} */
 
 /* -------------------------------------------------------------------- */

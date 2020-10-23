@@ -44,9 +44,7 @@
 
 #include <iostream>
 
-namespace blender {
-namespace io {
-namespace usd {
+namespace blender::io::usd {
 
 USDGenericMeshWriter::USDGenericMeshWriter(const USDExporterContext &ctx) : USDAbstractWriter(ctx)
 {
@@ -182,8 +180,8 @@ void USDGenericMeshWriter::write_mesh(HierarchyContext &context, Mesh *mesh)
                                                                                     true);
 
   if (!attr_points.HasValue()) {
-    // Provide the initial value as default. This makes USD write the value as constant if they
-    // don't change over time.
+    /* Provide the initial value as default. This makes USD write the value as constant if they
+     * don't change over time. */
     attr_points.Set(usd_mesh_data.points, defaultTime);
     attr_face_vertex_counts.Set(usd_mesh_data.face_vertex_counts, defaultTime);
     attr_face_vertex_indices.Set(usd_mesh_data.face_indices, defaultTime);
@@ -223,7 +221,7 @@ void USDGenericMeshWriter::write_mesh(HierarchyContext &context, Mesh *mesh)
   }
   write_surface_velocity(context.object, mesh, usd_mesh);
 
-  // TODO(Sybren): figure out what happens when the face groups change.
+  /* TODO(Sybren): figure out what happens when the face groups change. */
   if (frame_has_been_written_) {
     return;
   }
@@ -344,7 +342,7 @@ void USDGenericMeshWriter::assign_materials(const HierarchyContext &context,
     return;
   }
 
-  // Define a geometry subset per material.
+  /* Define a geometry subset per material. */
   for (const MaterialFaceGroups::value_type &face_group : usd_face_groups) {
     short material_number = face_group.first;
     const pxr::VtIntArray &face_indices = face_group.second;
@@ -462,6 +460,4 @@ Mesh *USDMeshWriter::get_export_mesh(Object *object_eval, bool & /*r_needsfree*/
   return BKE_object_get_evaluated_mesh(object_eval);
 }
 
-}  // namespace usd
-}  // namespace io
-}  // namespace blender
+}  // namespace blender::io::usd

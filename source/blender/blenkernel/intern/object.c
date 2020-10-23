@@ -48,6 +48,7 @@
 #include "DNA_meta_types.h"
 #include "DNA_movieclip_types.h"
 #include "DNA_object_types.h"
+#include "DNA_pointcloud_types.h"
 #include "DNA_rigidbody_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
@@ -60,6 +61,7 @@
 #include "BLI_blenlib.h"
 #include "BLI_kdtree.h"
 #include "BLI_linklist.h"
+#include "BLI_listbase.h"
 #include "BLI_math.h"
 #include "BLI_threads.h"
 #include "BLI_utildefines.h"
@@ -358,9 +360,9 @@ static void object_make_local(Main *bmain, ID *id, const int flags)
       }
     }
     else {
-      Object *ob_new = BKE_object_copy(bmain, ob);
+      Object *ob_new = (Object *)BKE_id_copy(bmain, &ob->id);
+      id_us_min(&ob_new->id);
 
-      ob_new->id.us = 0;
       ob_new->proxy = ob_new->proxy_from = ob_new->proxy_group = NULL;
 
       /* setting newid is mandatory for complex make_lib_local logic... */
@@ -658,7 +660,7 @@ bool BKE_object_support_modifier_type_check(const Object *ob, int modifier_type)
 
   mti = BKE_modifier_get_info(modifier_type);
 
-  /* Only geometry objects should be able to get modifiers [#25291] */
+  /* Only geometry objects should be able to get modifiers T25291. */
   if (ob->type == OB_HAIR) {
     return (mti->modifyHair != NULL) || (mti->flags & eModifierTypeFlag_AcceptsVertexCosOnly);
   }
@@ -685,6 +687,60 @@ bool BKE_object_support_modifier_type_check(const Object *ob, int modifier_type)
   return false;
 }
 
+bool BKE_object_copy_modifier(struct Object *ob_dst, const struct Object *ob_src, ModifierData *md)
+{
+  ModifierData *nmd = NULL;
+
+  if (ELEM(md->type, eModifierType_Hook, eModifierType_Collision)) {
+    return false;
+  }
+
+  if (!BKE_object_support_modifier_type_check(ob_dst, md->type)) {
+    return false;
+  }
+
+  switch (md->type) {
+    case eModifierType_Softbody:
+      BKE_object_copy_softbody(ob_dst, ob_src, 0);
+      break;
+    case eModifierType_Skin:
+      /* ensure skin-node customdata exists */
+      BKE_mesh_ensure_skin_customdata(ob_dst->data);
+      break;
+  }
+
+  nmd = BKE_modifier_new(md->type);
+  BLI_strncpy(nmd->name, md->name, sizeof(nmd->name));
+
+  if (md->type == eModifierType_Multires) {
+    /* Has to be done after mod creation, but *before* we actually copy its settings! */
+    multiresModifier_sync_levels_ex(
+        ob_dst, (MultiresModifierData *)md, (MultiresModifierData *)nmd);
+  }
+
+  BKE_modifier_copydata(md, nmd);
+  BLI_addtail(&ob_dst->modifiers, nmd);
+  BKE_modifier_unique_name(&ob_dst->modifiers, nmd);
+
+  return true;
+}
+
+bool BKE_object_copy_gpencil_modifier(struct Object *ob_dst, GpencilModifierData *md)
+{
+  GpencilModifierData *nmd = NULL;
+
+  nmd = BKE_gpencil_modifier_new(md->type);
+  BLI_strncpy(nmd->name, md->name, sizeof(nmd->name));
+
+  const GpencilModifierTypeInfo *mti = BKE_gpencil_modifier_get_info(md->type);
+  mti->copyData(md, nmd);
+
+  BLI_addtail(&ob_dst->greasepencil_modifiers, nmd);
+  BKE_gpencil_modifier_unique_name(&ob_dst->greasepencil_modifiers, nmd);
+
+  return true;
+}
+
 void BKE_object_link_modifiers(struct Object *ob_dst, const struct Object *ob_src)
 {
   BKE_object_free_modifiers(ob_dst, 0);
@@ -698,54 +754,14 @@ void BKE_object_link_modifiers(struct Object *ob_dst, const struct Object *ob_sr
   /* No grease pencil modifiers. */
   if ((ob_src->type != OB_GPENCIL) && (ob_dst->type != OB_GPENCIL)) {
     LISTBASE_FOREACH (ModifierData *, md, &ob_src->modifiers) {
-      ModifierData *nmd = NULL;
-
-      if (ELEM(md->type, eModifierType_Hook, eModifierType_Collision)) {
-        continue;
-      }
-
-      if (!BKE_object_support_modifier_type_check(ob_dst, md->type)) {
-        continue;
-      }
-
-      switch (md->type) {
-        case eModifierType_Softbody:
-          BKE_object_copy_softbody(ob_dst, ob_src, 0);
-          break;
-        case eModifierType_Skin:
-          /* ensure skin-node customdata exists */
-          BKE_mesh_ensure_skin_customdata(ob_dst->data);
-          break;
-      }
-
-      nmd = BKE_modifier_new(md->type);
-      BLI_strncpy(nmd->name, md->name, sizeof(nmd->name));
-
-      if (md->type == eModifierType_Multires) {
-        /* Has to be done after mod creation, but *before* we actually copy its settings! */
-        multiresModifier_sync_levels_ex(
-            ob_dst, (MultiresModifierData *)md, (MultiresModifierData *)nmd);
-      }
-
-      BKE_modifier_copydata(md, nmd);
-      BLI_addtail(&ob_dst->modifiers, nmd);
-      BKE_modifier_unique_name(&ob_dst->modifiers, nmd);
+      BKE_object_copy_modifier(ob_dst, ob_src, md);
     }
   }
 
   /* Copy grease pencil modifiers. */
   if ((ob_src->type == OB_GPENCIL) && (ob_dst->type == OB_GPENCIL)) {
     LISTBASE_FOREACH (GpencilModifierData *, md, &ob_src->greasepencil_modifiers) {
-      GpencilModifierData *nmd = NULL;
-
-      nmd = BKE_gpencil_modifier_new(md->type);
-      BLI_strncpy(nmd->name, md->name, sizeof(nmd->name));
-
-      const GpencilModifierTypeInfo *mti = BKE_gpencil_modifier_get_info(md->type);
-      mti->copyData(md, nmd);
-
-      BLI_addtail(&ob_dst->greasepencil_modifiers, nmd);
-      BKE_gpencil_modifier_unique_name(&ob_dst->greasepencil_modifiers, nmd);
+      BKE_object_copy_gpencil_modifier(ob_dst, md);
     }
   }
 
@@ -959,7 +975,7 @@ void BKE_object_free_caches(Object *object)
   }
 
   /* Tag object for update, so once memory critical operation is over and
-   * scene update routines are back to it's business the object will be
+   * scene update routines are back to its business the object will be
    * guaranteed to be in a known state.
    */
   if (update_flag != 0) {
@@ -1270,7 +1286,7 @@ void *BKE_object_obdata_add_from_type(Main *bmain, int type, const char *name)
     case OB_HAIR:
       return BKE_hair_add(bmain, name);
     case OB_POINTCLOUD:
-      return BKE_pointcloud_add(bmain, name);
+      return BKE_pointcloud_add_default(bmain, name);
     case OB_VOLUME:
       return BKE_volume_add(bmain, name);
     case OB_EMPTY:
@@ -1330,6 +1346,7 @@ Object *BKE_object_add_only_object(Main *bmain, int type, const char *name)
     name = get_obdata_defname(type);
   }
 
+  /* We cannot use #BKE_id_new here as we need some custom initialization code. */
   ob = BKE_libblock_alloc(bmain, ID_OB, name, 0);
 
   /* We increase object user count when linking to Collections. */
@@ -1770,20 +1787,6 @@ void BKE_object_transform_copy(Object *ob_tar, const Object *ob_src)
 }
 
 /**
- * Copy objects, will re-initialize cached simulation data.
- */
-Object *BKE_object_copy(Main *bmain, const Object *ob)
-{
-  Object *ob_copy;
-  BKE_id_copy(bmain, &ob->id, (ID **)&ob_copy);
-
-  /* We increase object user count when linking to Collections. */
-  id_us_min(&ob_copy->id);
-
-  return ob_copy;
-}
-
-/**
  * Perform deep-copy of object and its 'children' data-blocks (obdata, materials, actions, etc.).
  *
  * \param dupflag: Controls which sub-data are also duplicated
@@ -1813,8 +1816,7 @@ Object *BKE_object_duplicate(Main *bmain,
 
   Material ***matarar;
 
-  Object *obn;
-  BKE_id_copy(bmain, &ob->id, (ID **)&obn);
+  Object *obn = (Object *)BKE_id_copy(bmain, &ob->id);
   id_us_min(&obn->id);
   if (is_subprocess) {
     ID_NEW_SET(ob, obn);
@@ -2058,8 +2060,8 @@ void BKE_object_make_proxy(Main *bmain, Object *ob, Object *target, Object *cob)
   }
 
   ob->proxy = target;
+  id_us_plus(&target->id);
   ob->proxy_group = cob;
-  id_lib_extern(&target->id);
 
   DEG_id_tag_update(&ob->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
   DEG_id_tag_update(&target->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
@@ -2798,7 +2800,7 @@ void BKE_object_where_is_calc_time(Depsgraph *depsgraph, Scene *scene, Object *o
 /**
  * Calculate object transformation matrix without recalculating dependencies and
  * constraints -- assume dependencies are already solved by depsgraph.
- * No changes to object and it's parent would be done.
+ * No changes to object and its parent would be done.
  * Used for bundles orientation in 3d space relative to parented blender camera.
  */
 void BKE_object_where_is_calc_mat4(Object *ob, float r_obmat[4][4])
@@ -3867,17 +3869,31 @@ KeyBlock *BKE_object_shapekey_insert(Main *bmain,
                                      const char *name,
                                      const bool from_mix)
 {
+  KeyBlock *key = NULL;
+
   switch (ob->type) {
     case OB_MESH:
-      return insert_meshkey(bmain, ob, name, from_mix);
+      key = insert_meshkey(bmain, ob, name, from_mix);
+      break;
     case OB_CURVE:
     case OB_SURF:
-      return insert_curvekey(bmain, ob, name, from_mix);
+      key = insert_curvekey(bmain, ob, name, from_mix);
+      break;
     case OB_LATTICE:
-      return insert_lattkey(bmain, ob, name, from_mix);
+      key = insert_lattkey(bmain, ob, name, from_mix);
+      break;
     default:
-      return NULL;
+      break;
   }
+
+  /* Set the first active when none is set when called from RNA. */
+  if (key != NULL) {
+    if (ob->shapenr <= 0) {
+      ob->shapenr = 1;
+    }
+  }
+
+  return key;
 }
 
 bool BKE_object_shapekey_free(Main *bmain, Object *ob)
@@ -3948,7 +3964,11 @@ bool BKE_object_shapekey_remove(Main *bmain, Object *ob, KeyBlock *kb)
   }
   MEM_freeN(kb);
 
-  if (ob->shapenr > 1) {
+  /* Unset active when all are freed. */
+  if (BLI_listbase_is_empty(&key->block)) {
+    ob->shapenr = 0;
+  }
+  else if (ob->shapenr > 1) {
     ob->shapenr--;
   }
 
@@ -4355,7 +4375,7 @@ LinkNode *BKE_object_relational_superset(struct ViewLayer *view_layer,
 }
 
 /**
- * return all groups this object is apart of, caller must free.
+ * return all groups this object is a part of, caller must free.
  */
 struct LinkNode *BKE_object_groups(Main *bmain, Scene *scene, Object *ob)
 {
@@ -4529,8 +4549,8 @@ bool BKE_object_modifier_use_time(Object *ob, ModifierData *md)
 
     /* This here allows modifier properties to get driven and still update properly
      *
-     * Workaround to get [#26764] (e.g. subsurf levels not updating when animated/driven)
-     * working, without the updating problems ([#28525] [#28690] [#28774] [#28777]) caused
+     * Workaround to get T26764 (e.g. subsurf levels not updating when animated/driven)
+     * working, without the updating problems (T28525 T28690 T28774 T28777) caused
      * by the RNA updates cache introduced in r.38649
      */
     for (fcu = (FCurve *)adt->drivers.first; fcu != NULL; fcu = (FCurve *)fcu->next) {
@@ -4553,7 +4573,7 @@ bool BKE_object_modifier_gpencil_use_time(Object *ob, GpencilModifierData *md)
   }
 
   /* Check whether modifier is animated. */
-  /* TODO (Aligorith): this should be handled as part of build_animdata() */
+  /* TODO(Aligorith): this should be handled as part of build_animdata() */
   if (ob->adt) {
     AnimData *adt = ob->adt;
     FCurve *fcu;
@@ -4588,7 +4608,7 @@ bool BKE_object_shaderfx_use_time(Object *ob, ShaderFxData *fx)
   }
 
   /* Check whether effect is animated. */
-  /* TODO (Aligorith): this should be handled as part of build_animdata() */
+  /* TODO(Aligorith): this should be handled as part of build_animdata() */
   if (ob->adt) {
     AnimData *adt = ob->adt;
     FCurve *fcu;

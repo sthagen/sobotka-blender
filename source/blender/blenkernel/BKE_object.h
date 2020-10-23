@@ -77,6 +77,10 @@ bool BKE_object_shaderfx_use_time(struct Object *ob, struct ShaderFxData *md);
 
 bool BKE_object_support_modifier_type_check(const struct Object *ob, int modifier_type);
 
+bool BKE_object_copy_modifier(struct Object *ob_dst,
+                              const struct Object *ob_src,
+                              struct ModifierData *md);
+bool BKE_object_copy_gpencil_modifier(struct Object *ob_dst, struct GpencilModifierData *md);
 void BKE_object_link_modifiers(struct Object *ob_dst, const struct Object *ob_src);
 void BKE_object_free_modifiers(struct Object *ob, const int flag);
 void BKE_object_free_shaderfx(struct Object *ob, const int flag);
@@ -132,7 +136,6 @@ void *BKE_object_obdata_add_from_type(struct Main *bmain, int type, const char *
     ATTR_NONNULL(1);
 int BKE_object_obdata_to_type(const struct ID *id) ATTR_NONNULL(1);
 
-struct Object *BKE_object_copy(struct Main *bmain, const struct Object *ob);
 bool BKE_object_is_libdata(const struct Object *ob);
 bool BKE_object_obdata_is_libdata(const struct Object *ob);
 

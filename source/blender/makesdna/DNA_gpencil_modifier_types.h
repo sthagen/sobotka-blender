@@ -57,7 +57,9 @@ typedef enum GpencilModifierMode {
   eGpencilModifierMode_Realtime = (1 << 0),
   eGpencilModifierMode_Render = (1 << 1),
   eGpencilModifierMode_Editmode = (1 << 2),
+#ifdef DNA_DEPRECATED_ALLOW
   eGpencilModifierMode_Expanded_DEPRECATED = (1 << 3),
+#endif
   eGpencilModifierMode_Virtual = (1 << 4),
 } GpencilModifierMode;
 
@@ -70,7 +72,7 @@ typedef struct GpencilModifierData {
   struct GpencilModifierData *next, *prev;
 
   int type, mode;
-  int stackindex;
+  char _pad0[4];
   short flag;
   short ui_expand_flag;
   /** MAX_NAME. */
