@@ -2138,7 +2138,7 @@ static void viewzoom_apply_camera(ViewOpsData *vod,
                                      zoomfac_prev,
                                      &vod->prev.time);
 
-  if (zfac != 1.0f && zfac != 0.0f) {
+  if (!ELEM(zfac, 1.0f, 0.0f)) {
     /* calculate inverted, then invert again (needed because of camera zoom scaling) */
     zfac = 1.0f / zfac;
     view_zoom_to_window_xy_camera(vod->scene,
@@ -2382,7 +2382,7 @@ static int viewzoom_invoke(bContext *C, wmOperator *op, const wmEvent *event)
     viewzoom_exec(C, op);
   }
   else {
-    if (event->type == MOUSEZOOM || event->type == MOUSEPAN) {
+    if (ELEM(event->type, MOUSEZOOM, MOUSEPAN)) {
 
       if (U.uiflag & USER_ZOOM_HORIZ) {
         vod->init.event_xy[0] = vod->prev.event_xy[0] = event->x;
@@ -3635,6 +3635,17 @@ static int view3d_zoom_border_exec(bContext *C, wmOperator *op)
     MEM_SAFE_FREE(depth_temp.depths);
   }
 
+  /* Resize border to the same ratio as the window. */
+  {
+    const float region_aspect = (float)region->winx / (float)region->winy;
+    if (((float)BLI_rcti_size_x(&rect) / (float)BLI_rcti_size_y(&rect)) < region_aspect) {
+      BLI_rcti_resize_x(&rect, (int)(BLI_rcti_size_y(&rect) * region_aspect));
+    }
+    else {
+      BLI_rcti_resize_y(&rect, (int)(BLI_rcti_size_x(&rect) / region_aspect));
+    }
+  }
+
   cent[0] = (((float)rect.xmin) + ((float)rect.xmax)) / 2;
   cent[1] = (((float)rect.ymin) + ((float)rect.ymax)) / 2;
 
@@ -3656,6 +3667,9 @@ static int view3d_zoom_border_exec(bContext *C, wmOperator *op)
     negate_v3_v3(new_ofs, p);
 
     new_dist = len_v3(dvec);
+
+    /* Account for the lens, without this a narrow lens zooms in too close. */
+    new_dist *= (v3d->lens / DEFAULT_SENSOR_WIDTH);
 
     /* ignore dist_range min */
     dist_range[0] = v3d->clip_start * 1.5f;
@@ -3896,6 +3910,7 @@ static void axis_set_view(bContext *C,
                           region,
                           smooth_viewtx,
                           &(const V3D_SmoothParams){
+                              .camera_old = camera_eval,
                               .ofs = ofs,
                               .quat = quat,
                               .dist = &dist,
@@ -4813,7 +4828,7 @@ void VIEW3D_OT_background_image_add(wmOperatorType *ot)
                                  FILE_OPENFILE,
                                  WM_FILESEL_FILEPATH | WM_FILESEL_RELPATH,
                                  FILE_DEFAULTDISPLAY,
-                                 FILE_SORT_ALPHA);
+                                 FILE_SORT_DEFAULT);
 }
 
 /** \} */

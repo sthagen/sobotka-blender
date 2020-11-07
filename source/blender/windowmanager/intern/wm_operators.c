@@ -1810,7 +1810,7 @@ static void WM_OT_call_menu(wmOperatorType *ot)
 {
   ot->name = "Call Menu";
   ot->idname = "WM_OT_call_menu";
-  ot->description = "Call (draw) a pre-defined menu";
+  ot->description = "Call (draw) a predefined menu";
 
   ot->exec = wm_call_menu_exec;
   ot->poll = WM_operator_winactive;
@@ -1841,7 +1841,7 @@ static void WM_OT_call_menu_pie(wmOperatorType *ot)
 {
   ot->name = "Call Pie Menu";
   ot->idname = "WM_OT_call_menu_pie";
-  ot->description = "Call (draw) a pre-defined pie menu";
+  ot->description = "Call (draw) a predefined pie menu";
 
   ot->invoke = wm_call_pie_menu_invoke;
   ot->exec = wm_call_pie_menu_exec;
@@ -1875,7 +1875,7 @@ static void WM_OT_call_panel(wmOperatorType *ot)
 {
   ot->name = "Call Panel";
   ot->idname = "WM_OT_call_panel";
-  ot->description = "Call (draw) a pre-defined panel";
+  ot->description = "Call (draw) a predefined panel";
 
   ot->exec = wm_call_panel_exec;
   ot->poll = WM_operator_winactive;
@@ -2886,7 +2886,7 @@ static int radial_control_modal(bContext *C, wmOperator *op, const wmEvent *even
           case PROP_FACTOR:
             new_value = (WM_RADIAL_CONTROL_DISPLAY_SIZE - dist) / WM_RADIAL_CONTROL_DISPLAY_WIDTH;
             if (snap) {
-              new_value = ((int)ceil(new_value * 10.f) * 10.0f) / 100.f;
+              new_value = ((int)ceil(new_value * 10.0f) * 10.0f) / 100.0f;
             }
             /* Invert new value to increase the factor moving the mouse to the right */
             new_value = 1 - new_value;
@@ -3771,7 +3771,7 @@ static void gesture_circle_modal_keymap(wmKeyConfig *keyconf)
       {GESTURE_MODAL_CIRCLE_SIZE, "SIZE", 0, "Size", ""},
 
       {GESTURE_MODAL_SELECT, "SELECT", 0, "Select", ""},
-      {GESTURE_MODAL_DESELECT, "DESELECT", 0, "DeSelect", ""},
+      {GESTURE_MODAL_DESELECT, "DESELECT", 0, "Deselect", ""},
       {GESTURE_MODAL_NOP, "NOP", 0, "No Operation", ""},
 
       {0, NULL, 0, NULL, NULL},
@@ -3834,7 +3834,7 @@ static void gesture_box_modal_keymap(wmKeyConfig *keyconf)
   static const EnumPropertyItem modal_items[] = {
       {GESTURE_MODAL_CANCEL, "CANCEL", 0, "Cancel", ""},
       {GESTURE_MODAL_SELECT, "SELECT", 0, "Select", ""},
-      {GESTURE_MODAL_DESELECT, "DESELECT", 0, "DeSelect", ""},
+      {GESTURE_MODAL_DESELECT, "DESELECT", 0, "Deselect", ""},
       {GESTURE_MODAL_BEGIN, "BEGIN", 0, "Begin", ""},
       {GESTURE_MODAL_MOVE, "MOVE", 0, "Move", ""},
       {0, NULL, 0, NULL, NULL},

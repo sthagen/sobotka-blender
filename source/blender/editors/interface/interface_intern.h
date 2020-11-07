@@ -943,7 +943,7 @@ typedef struct uiWidgetBaseParameters {
   /* We pack alpha check and discard factor in alpha_discard.
    * If the value is negative then we do alpha check.
    * The absolute value itself is the discard factor.
-   * Initialize value to 1.0.f if you don't want discard */
+   * Initialize value to 1.0f if you don't want discard. */
   float alpha_discard;
   float tria_type;
   float _pad[3];
@@ -995,8 +995,9 @@ void ui_draw_preview_item(
 
 #define UI_TEXT_MARGIN_X 0.4f
 #define UI_POPUP_MARGIN (UI_DPI_FAC * 12)
-/* margin at top of screen for popups */
-#define UI_POPUP_MENU_TOP (int)(8 * UI_DPI_FAC)
+/* Margin at top of screen for popups. Note this value must be sufficient
+   to draw a popover arrow to avoid cropping it. */
+#define UI_POPUP_MENU_TOP (int)(10 * UI_DPI_FAC)
 
 #define UI_PIXEL_AA_JITTER 8
 extern const float ui_pixel_jitter[UI_PIXEL_AA_JITTER][2];

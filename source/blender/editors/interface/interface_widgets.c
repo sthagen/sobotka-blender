@@ -548,6 +548,24 @@ void UI_draw_anti_tria(
   GPU_blend(GPU_BLEND_NONE);
 }
 
+/* Triangle 'icon' for panel header and other cases. */
+void UI_draw_icon_tri(float x, float y, char dir, const float color[4])
+{
+  const float f3 = 0.05 * U.widget_unit;
+  const float f5 = 0.15 * U.widget_unit;
+  const float f7 = 0.25 * U.widget_unit;
+
+  if (dir == 'h') {
+    UI_draw_anti_tria(x - f3, y - f5, x - f3, y + f5, x + f7, y, color);
+  }
+  else if (dir == 't') {
+    UI_draw_anti_tria(x - f5, y - f7, x + f5, y - f7, x, y + f3, color);
+  }
+  else { /* 'v' = vertical, down. */
+    UI_draw_anti_tria(x - f5, y + f3, x + f5, y + f3, x, y - f7, color);
+  }
+}
+
 /* triangle 'icon' inside rect */
 void ui_draw_anti_tria_rect(const rctf *rect, char dir, const float color[4])
 {
@@ -899,7 +917,7 @@ static void shape_preset_init_trias_ex(uiWidgetTrias *tria,
   float centx, centy, sizex, sizey, minsize;
   int a, i1 = 0, i2 = 1;
 
-  if (where == 'r' || where == 'l') {
+  if (ELEM(where, 'r', 'l')) {
     minsize = BLI_rcti_size_y(rect);
   }
   else {
@@ -2426,17 +2444,21 @@ static void widget_draw_text_icon(const uiFontStyle *fstyle,
       }
     }
     else if (but->drawflag & UI_BUT_TEXT_LEFT) {
-
-      /* Reduce the left padding for labels without an icon. */
-      if ((but->type == UI_BTYPE_LABEL) && !(but->flag & UI_HAS_ICON) &&
-          !ui_block_is_menu(but->block)) {
-        text_padding /= 2;
-      }
-
       rect->xmin += text_padding;
     }
     else if (but->drawflag & UI_BUT_TEXT_RIGHT) {
       rect->xmax -= text_padding;
+    }
+  }
+  else {
+    /* In case a separate text label and some other button are placed under each other,
+       and the outline of the button does not contrast with the background.
+       Add an offset (thickness of the outline) so that the text does not stick out visually. */
+    if (but->drawflag & UI_BUT_TEXT_LEFT) {
+      rect->xmin += U.pixelsize;
+    }
+    else if (but->drawflag & UI_BUT_TEXT_RIGHT) {
+      rect->xmax -= U.pixelsize;
     }
   }
 
@@ -4053,7 +4075,7 @@ static void widget_optionbut(uiWidgetColors *wcol,
   }
 
   /* smaller */
-  delta = 1 + BLI_rcti_size_y(&recttemp) / 8;
+  delta = (BLI_rcti_size_y(&recttemp) - 2 * U.pixelsize) / 6;
   BLI_rcti_resize(
       &recttemp, BLI_rcti_size_x(&recttemp) - delta * 2, BLI_rcti_size_y(&recttemp) - delta * 2);
   /* Keep one edge in place. */
@@ -4574,6 +4596,9 @@ void ui_draw_but(const bContext *C, struct ARegion *region, uiStyle *style, uiBu
         else if (but->block->theme_style == UI_BLOCK_THEME_STYLE_POPUP) {
           wt->wcol_theme = &tui->wcol_menu_back;
           wt->state = widget_state;
+        }
+        if (!(but->flag & UI_HAS_ICON)) {
+          but->drawflag |= UI_BUT_NO_TEXT_PADDING;
         }
         break;
 

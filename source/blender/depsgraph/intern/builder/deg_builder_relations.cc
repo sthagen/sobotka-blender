@@ -89,7 +89,6 @@
 #include "BKE_particle.h"
 #include "BKE_pointcache.h"
 #include "BKE_rigidbody.h"
-#include "BKE_sequencer.h"
 #include "BKE_shader_fx.h"
 #include "BKE_shrinkwrap.h"
 #include "BKE_sound.h"
@@ -98,6 +97,8 @@
 
 #include "RNA_access.h"
 #include "RNA_types.h"
+
+#include "SEQ_sequencer.h"
 
 #include "DEG_depsgraph.h"
 #include "DEG_depsgraph_build.h"
@@ -591,13 +592,13 @@ void DepsgraphRelationBuilder::build_collection(LayerCollection *from_layer_coll
      * recurses into all the nested objects and collections. */
     return;
   }
-  build_idproperties(collection->id.properties);
   const bool group_done = built_map_.checkIsBuiltAndTag(collection);
   OperationKey object_transform_final_key(object != nullptr ? &object->id : nullptr,
                                           NodeType::TRANSFORM,
                                           OperationCode::TRANSFORM_FINAL);
   ComponentKey duplicator_key(object != nullptr ? &object->id : nullptr, NodeType::DUPLI);
   if (!group_done) {
+    build_idproperties(collection->id.properties);
     LISTBASE_FOREACH (CollectionObject *, cob, &collection->gobject) {
       build_object(cob->ob);
     }
@@ -742,7 +743,7 @@ void DepsgraphRelationBuilder::build_object_proxy_from(Object *object)
 
 void DepsgraphRelationBuilder::build_object_proxy_group(Object *object)
 {
-  if (object->proxy_group == nullptr || object->proxy_group == object->proxy) {
+  if (ELEM(object->proxy_group, nullptr, object->proxy)) {
     return;
   }
   /* Object is local here (local in .blend file, users interacts with it). */
@@ -1233,7 +1234,7 @@ void DepsgraphRelationBuilder::build_constraints(ID *id,
         }
       }
       if (cti->flush_constraint_targets) {
-        cti->flush_constraint_targets(con, &targets, 1);
+        cti->flush_constraint_targets(con, &targets, true);
       }
     }
   }
@@ -1853,7 +1854,7 @@ void DepsgraphRelationBuilder::build_particle_systems(Object *object)
     /* Keyed particle targets. */
     if (ELEM(part->phystype, PART_PHYS_KEYED, PART_PHYS_BOIDS)) {
       LISTBASE_FOREACH (ParticleTarget *, particle_target, &psys->targets) {
-        if (particle_target->ob == nullptr || particle_target->ob == object) {
+        if (ELEM(particle_target->ob, nullptr, object)) {
           continue;
         }
         /* Make sure target object is pulled into the graph. */
@@ -2203,7 +2204,7 @@ void DepsgraphRelationBuilder::build_object_data_geometry_datablock(ID *obdata)
 
       /* Layer parenting need react to the parent object transformation. */
       LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) {
-        if (gpl->parent != NULL) {
+        if (gpl->parent != nullptr) {
           ComponentKey gpd_geom_key(&gpd->id, NodeType::GEOMETRY);
 
           if (gpl->partype == PARBONE) {
@@ -2667,6 +2668,9 @@ void DepsgraphRelationBuilder::build_scene_sequencer(Scene *scene)
   if (scene->ed == nullptr) {
     return;
   }
+  if (built_map_.checkIsBuiltAndTag(scene, BuilderMap::TAG_SCENE_SEQUENCER)) {
+    return;
+  }
   build_scene_audio(scene);
   ComponentKey scene_audio_key(&scene->id, NodeType::AUDIO);
   /* Make sure dependencies from sequences data goes to the sequencer evaluation. */
@@ -2810,8 +2814,7 @@ void DepsgraphRelationBuilder::build_copy_on_write_relations(IDNode *id_node)
      *   to preserve that cache in copy-on-write, but for the time being
      *   we allow flush to layer collections component which will ensure
      *   that cached array of bases exists and is up-to-date. */
-    if (comp_node->type == NodeType::PARAMETERS ||
-        comp_node->type == NodeType::LAYER_COLLECTIONS) {
+    if (ELEM(comp_node->type, NodeType::PARAMETERS, NodeType::LAYER_COLLECTIONS)) {
       rel_flag &= ~RELATION_FLAG_NO_FLUSH;
     }
     /* All entry operations of each component should wait for a proper

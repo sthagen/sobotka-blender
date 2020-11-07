@@ -880,8 +880,7 @@ void BKE_node_tree_unlink_id(ID *id, struct bNodeTree *ntree);
  * } FOREACH_NODETREE_END;
  * \endcode
  *
- * \{
- */
+ * \{ */
 
 /* should be an opaque type, only for internal use by BKE_node_tree_iter_*** */
 struct NodeTreeIterStore {
@@ -1337,8 +1336,8 @@ int ntreeTexExecTree(struct bNodeTree *ntree,
 
 /** \} */
 
-void init_nodesystem(void);
-void free_nodesystem(void);
+void BKE_node_system_init(void);
+void BKE_node_system_exit(void);
 
 /* -------------------------------------------------------------------- */
 /* evaluation support, */

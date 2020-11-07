@@ -2068,7 +2068,7 @@ static bool apply_bool_op(BoolOpType bool_optype, const Array<int> &winding)
         return true;
       }
       for (int i = 1; i < nw; ++i) {
-        if (winding[i] == 1) {
+        if (winding[i] >= 1) {
           return false;
         }
       }
@@ -2851,7 +2851,7 @@ static bool dissolve_leaves_valid_bmesh(FaceMergeState *fms,
    * saying which faces a vertex touches. */
   for (int a_v_index = 0; ok && a_v_index < alen; ++a_v_index) {
     const Vert *a_v = mf_left.vert[a_v_index];
-    if (a_v != me.v1 && a_v != me.v2) {
+    if (!ELEM(a_v, me.v1, me.v2)) {
       for (int b_v_index = 0; b_v_index < blen; ++b_v_index) {
         const Vert *b_v = mf_right.vert[b_v_index];
         if (a_v == b_v) {

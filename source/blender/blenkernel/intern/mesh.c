@@ -333,6 +333,8 @@ IDTypeInfo IDType_ID_ME = {
     .blend_read_data = mesh_blend_read_data,
     .blend_read_lib = mesh_blend_read_lib,
     .blend_read_expand = mesh_read_expand,
+
+    .blend_read_undo_preserve = NULL,
 };
 
 enum {
@@ -879,6 +881,7 @@ void BKE_mesh_copy_settings(Mesh *me_dst, const Mesh *me_src)
   me_dst->remesh_voxel_size = me_src->remesh_voxel_size;
   me_dst->remesh_voxel_adaptivity = me_src->remesh_voxel_adaptivity;
   me_dst->remesh_mode = me_src->remesh_mode;
+  me_dst->symmetry = me_src->symmetry;
 
   me_dst->face_sets_color_seed = me_src->face_sets_color_seed;
   me_dst->face_sets_color_default = me_src->face_sets_color_default;
@@ -1495,8 +1498,11 @@ void BKE_mesh_transform(Mesh *me, const float mat[4][4], bool do_keys)
 
 void BKE_mesh_translate(Mesh *me, const float offset[3], const bool do_keys)
 {
+  MVert *mvert = CustomData_duplicate_referenced_layer(&me->vdata, CD_MVERT, me->totvert);
+  /* If the referenced layer has been re-allocated need to update pointers stored in the mesh. */
+  BKE_mesh_update_customdata_pointers(me, false);
+
   int i = me->totvert;
-  MVert *mvert;
   for (mvert = me->mvert; i--; mvert++) {
     add_v3_v3(mvert->co, offset);
   }

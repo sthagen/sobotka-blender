@@ -44,6 +44,7 @@
 #include "DNA_simulation_types.h"
 
 #include "BLI_blenlib.h"
+#include "BLI_endian_switch.h"
 #include "BLI_math.h"
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
@@ -66,6 +67,8 @@
 #include "BKE_pointcache.h"
 #include "BKE_scene.h"
 #include "BKE_softbody.h"
+
+#include "BLO_read_write.h"
 
 #include "BIK_api.h"
 
@@ -256,7 +259,9 @@ static int ptcache_softbody_totpoint(void *soft_v, int UNUSED(cfra))
   SoftBody *soft = soft_v;
   return soft->totpoint;
 }
-static void ptcache_softbody_error(void *UNUSED(soft_v), const char *UNUSED(message))
+static void ptcache_softbody_error(const ID *UNUSED(owner_id),
+                                   void *UNUSED(soft_v),
+                                   const char *UNUSED(message))
 {
   /* ignored for now */
 }
@@ -460,7 +465,7 @@ static void ptcache_particle_interpolate(int index,
   psys_interpolate_particle(-1, keys, (cfra - cfra1) / dfra, &pa->state, 1);
   interp_qt_qtqt(pa->state.rot, keys[1].rot, keys[2].rot, (cfra - cfra1) / dfra);
 
-  mul_v3_fl(pa->state.vel, 1.f / (dfra * timestep));
+  mul_v3_fl(pa->state.vel, 1.0f / (dfra * timestep));
 
   pa->state.time = cfra;
 }
@@ -471,7 +476,9 @@ static int ptcache_particle_totpoint(void *psys_v, int UNUSED(cfra))
   return psys->totpart;
 }
 
-static void ptcache_particle_error(void *UNUSED(psys_v), const char *UNUSED(message))
+static void ptcache_particle_error(const ID *UNUSED(owner_id),
+                                   void *UNUSED(psys_v),
+                                   const char *UNUSED(message))
 {
   /* ignored for now */
 }
@@ -642,10 +649,11 @@ static int ptcache_cloth_totpoint(void *cloth_v, int UNUSED(cfra))
   return clmd->clothObject ? clmd->clothObject->mvert_num : 0;
 }
 
-static void ptcache_cloth_error(void *cloth_v, const char *message)
+static void ptcache_cloth_error(const ID *owner_id, void *cloth_v, const char *message)
 {
   ClothModifierData *clmd = cloth_v;
-  BKE_modifier_set_error(&clmd->modifier, "%s", message);
+  BLI_assert(GS(owner_id->name) == ID_OB);
+  BKE_modifier_set_error((Object *)owner_id, &clmd->modifier, "%s", message);
 }
 
 static int ptcache_dynamicpaint_totpoint(void *sd, int UNUSED(cfra))
@@ -659,7 +667,9 @@ static int ptcache_dynamicpaint_totpoint(void *sd, int UNUSED(cfra))
   return surface->data->total_points;
 }
 
-static void ptcache_dynamicpaint_error(void *UNUSED(sd), const char *UNUSED(message))
+static void ptcache_dynamicpaint_error(const ID *UNUSED(owner_id),
+                                       void *UNUSED(sd),
+                                       const char *UNUSED(message))
 {
   /* ignored for now */
 }
@@ -731,8 +741,7 @@ static int ptcache_dynamicpaint_read(PTCacheFile *pf, void *dp_v)
     if (surface->type == MOD_DPAINT_SURFACE_T_PAINT) {
       data_len = sizeof(PaintPoint);
     }
-    else if (surface->type == MOD_DPAINT_SURFACE_T_DISPLACE ||
-             surface->type == MOD_DPAINT_SURFACE_T_WEIGHT) {
+    else if (ELEM(surface->type, MOD_DPAINT_SURFACE_T_DISPLACE, MOD_DPAINT_SURFACE_T_WEIGHT)) {
       data_len = sizeof(float);
     }
     else if (surface->type == MOD_DPAINT_SURFACE_T_WAVE) {
@@ -853,7 +862,9 @@ static int ptcache_rigidbody_totpoint(void *rb_v, int UNUSED(cfra))
   return rbw->numbodies;
 }
 
-static void ptcache_rigidbody_error(void *UNUSED(rb_v), const char *UNUSED(message))
+static void ptcache_rigidbody_error(const struct ID *UNUSED(owner_id),
+                                    void *UNUSED(rb_v),
+                                    const char *UNUSED(message))
 {
   /* ignored for now */
 }
@@ -2098,19 +2109,19 @@ static int ptcache_read_stream(PTCacheID *pid, int cfra)
   }
 
   if (!ptcache_file_header_begin_read(pf)) {
-    pid->error(pid->calldata, "Failed to read point cache file");
+    pid->error(pid->owner_id, pid->calldata, "Failed to read point cache file");
     error = 1;
   }
   else if (pf->type != pid->type) {
-    pid->error(pid->calldata, "Point cache file has wrong type");
+    pid->error(pid->owner_id, pid->calldata, "Point cache file has wrong type");
     error = 1;
   }
   else if (!pid->read_header(pf)) {
-    pid->error(pid->calldata, "Failed to read point cache file header");
+    pid->error(pid->owner_id, pid->calldata, "Failed to read point cache file header");
     error = 1;
   }
   else if (pf->totpoint != pid->totpoint(pid->calldata, cfra)) {
-    pid->error(pid->calldata, "Number of points in cache does not match mesh");
+    pid->error(pid->owner_id, pid->calldata, "Number of points in cache does not match mesh");
     error = 1;
   }
 
@@ -2119,7 +2130,7 @@ static int ptcache_read_stream(PTCacheID *pid, int cfra)
 
     /* We have stream reading here. */
     if (!pid->read_stream(pf, pid->calldata)) {
-      pid->error(pid->calldata, "Failed to read point cache file data");
+      pid->error(pid->owner_id, pid->calldata, "Failed to read point cache file data");
       error = 1;
     }
   }
@@ -2155,7 +2166,7 @@ static int ptcache_read(PTCacheID *pid, int cfra)
       int pid_totpoint = pid->totpoint(pid->calldata, cfra);
 
       if (totpoint != pid_totpoint) {
-        pid->error(pid->calldata, "Number of points in cache does not match mesh");
+        pid->error(pid->owner_id, pid->calldata, "Number of points in cache does not match mesh");
         totpoint = MIN2(totpoint, pid_totpoint);
       }
     }
@@ -2211,7 +2222,7 @@ static int ptcache_interpolate(PTCacheID *pid, float cfra, int cfra1, int cfra2)
       int pid_totpoint = pid->totpoint(pid->calldata, (int)cfra);
 
       if (totpoint != pid_totpoint) {
-        pid->error(pid->calldata, "Number of points in cache does not match mesh");
+        pid->error(pid->owner_id, pid->calldata, "Number of points in cache does not match mesh");
         totpoint = MIN2(totpoint, pid_totpoint);
       }
     }
@@ -3769,5 +3780,126 @@ void BKE_ptcache_invalidate(PointCache *cache)
     cache->flag &= ~PTCACHE_SIMULATION_VALID;
     cache->simframe = 0;
     cache->last_exact = MIN2(cache->startframe, 0);
+  }
+}
+
+static const char *ptcache_data_struct[] = {
+    "",          // BPHYS_DATA_INDEX
+    "",          // BPHYS_DATA_LOCATION
+    "",          // BPHYS_DATA_VELOCITY
+    "",          // BPHYS_DATA_ROTATION
+    "",          // BPHYS_DATA_AVELOCITY / BPHYS_DATA_XCONST */
+    "",          // BPHYS_DATA_SIZE:
+    "",          // BPHYS_DATA_TIMES:
+    "BoidData",  // case BPHYS_DATA_BOIDS:
+};
+static const char *ptcache_extra_struct[] = {
+    "",
+    "ParticleSpring",
+    "vec3f",
+};
+void BKE_ptcache_blend_write(BlendWriter *writer, ListBase *ptcaches)
+{
+  LISTBASE_FOREACH (PointCache *, cache, ptcaches) {
+    BLO_write_struct(writer, PointCache, cache);
+
+    if ((cache->flag & PTCACHE_DISK_CACHE) == 0) {
+      LISTBASE_FOREACH (PTCacheMem *, pm, &cache->mem_cache) {
+        BLO_write_struct(writer, PTCacheMem, pm);
+
+        for (int i = 0; i < BPHYS_TOT_DATA; i++) {
+          if (pm->data[i] && pm->data_types & (1 << i)) {
+            if (ptcache_data_struct[i][0] == '\0') {
+              BLO_write_raw(writer, MEM_allocN_len(pm->data[i]), pm->data[i]);
+            }
+            else {
+              BLO_write_struct_array_by_name(
+                  writer, ptcache_data_struct[i], pm->totpoint, pm->data[i]);
+            }
+          }
+        }
+
+        LISTBASE_FOREACH (PTCacheExtra *, extra, &pm->extradata) {
+          if (ptcache_extra_struct[extra->type][0] == '\0') {
+            continue;
+          }
+          BLO_write_struct(writer, PTCacheExtra, extra);
+          BLO_write_struct_array_by_name(
+              writer, ptcache_extra_struct[extra->type], extra->totdata, extra->data);
+        }
+      }
+    }
+  }
+}
+
+static void direct_link_pointcache_cb(BlendDataReader *reader, void *data)
+{
+  PTCacheMem *pm = data;
+  for (int i = 0; i < BPHYS_TOT_DATA; i++) {
+    BLO_read_data_address(reader, &pm->data[i]);
+
+    /* the cache saves non-struct data without DNA */
+    if (pm->data[i] && ptcache_data_struct[i][0] == '\0' &&
+        BLO_read_requires_endian_switch(reader)) {
+      /* data_size returns bytes. */
+      int tot = (BKE_ptcache_data_size(i) * pm->totpoint) / sizeof(int);
+
+      int *poin = pm->data[i];
+
+      BLI_endian_switch_int32_array(poin, tot);
+    }
+  }
+
+  BLO_read_list(reader, &pm->extradata);
+
+  LISTBASE_FOREACH (PTCacheExtra *, extra, &pm->extradata) {
+    BLO_read_data_address(reader, &extra->data);
+  }
+}
+
+static void direct_link_pointcache(BlendDataReader *reader, PointCache *cache)
+{
+  if ((cache->flag & PTCACHE_DISK_CACHE) == 0) {
+    BLO_read_list_cb(reader, &cache->mem_cache, direct_link_pointcache_cb);
+  }
+  else {
+    BLI_listbase_clear(&cache->mem_cache);
+  }
+
+  cache->flag &= ~PTCACHE_SIMULATION_VALID;
+  cache->simframe = 0;
+  cache->edit = NULL;
+  cache->free_edit = NULL;
+  cache->cached_frames = NULL;
+  cache->cached_frames_len = 0;
+}
+
+void BKE_ptcache_blend_read_data(BlendDataReader *reader,
+                                 ListBase *ptcaches,
+                                 PointCache **ocache,
+                                 int force_disk)
+{
+  if (ptcaches->first) {
+    BLO_read_list(reader, ptcaches);
+    LISTBASE_FOREACH (PointCache *, cache, ptcaches) {
+      direct_link_pointcache(reader, cache);
+      if (force_disk) {
+        cache->flag |= PTCACHE_DISK_CACHE;
+        cache->step = 1;
+      }
+    }
+
+    BLO_read_data_address(reader, ocache);
+  }
+  else if (*ocache) {
+    /* old "single" caches need to be linked too */
+    BLO_read_data_address(reader, ocache);
+    direct_link_pointcache(reader, *ocache);
+    if (force_disk) {
+      (*ocache)->flag |= PTCACHE_DISK_CACHE;
+      (*ocache)->step = 1;
+    }
+
+    ptcaches->first = ptcaches->last = *ocache;
   }
 }

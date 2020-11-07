@@ -39,7 +39,7 @@ set(INC
   ../sequencer
   ../shader_fx
   ../simulation
-  ../render/extern/include
+  ../render
   ../../../intern/ghost
   ../../../intern/glew-mx
   ../../../intern/guardedalloc
@@ -189,6 +189,7 @@ set(SRC
   intern/multires_reshape_vertcos.c
   intern/multires_subdiv.c
   intern/multires_unsubdivide.c
+  intern/multires_versioning.c
   intern/nla.c
   intern/node.c
   intern/object.c
@@ -705,7 +706,7 @@ endif()
 
 # # Warnings as errors, this is too strict!
 # if(MSVC)
-#    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /WX")
+#    string(APPEND CMAKE_C_FLAGS " /WX")
 # endif()
 
 blender_add_lib(bf_blenkernel "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
@@ -718,6 +719,7 @@ if(WITH_GTESTS)
   set(TEST_SRC
     intern/armature_test.cc
     intern/fcurve_test.cc
+    intern/lattice_deform_test.cc
   )
   set(TEST_INC
     ../editors/include
