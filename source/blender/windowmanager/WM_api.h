@@ -47,6 +47,7 @@ struct ImBuf;
 struct ImageFormatData;
 struct Main;
 struct MenuType;
+struct Operator;
 struct PointerRNA;
 struct PropertyRNA;
 struct ScrArea;
@@ -255,6 +256,9 @@ void WM_event_set_keymap_handler_post_callback(struct wmEventHandler_Keymap *han
 wmKeyMap *WM_event_get_keymap_from_handler(wmWindowManager *wm,
                                            struct wmEventHandler_Keymap *handler);
 
+wmKeyMapItem *WM_event_match_modal_keymap_item(const wmKeyMap *keymap,
+                                               struct wmOperator *op,
+                                               const struct wmEvent *event);
 wmKeyMapItem *WM_event_match_keymap_item(struct bContext *C,
                                          wmKeyMap *keymap,
                                          const struct wmEvent *event);
@@ -856,6 +860,9 @@ void WM_event_ndof_to_quat(const struct wmNDOFMotionData *ndof, float q[4]);
 
 float WM_event_tablet_data(const struct wmEvent *event, int *pen_flip, float tilt[2]);
 bool WM_event_is_tablet(const struct wmEvent *event);
+
+int WM_event_absolute_delta_x(const struct wmEvent *event);
+int WM_event_absolute_delta_y(const struct wmEvent *event);
 
 #ifdef WITH_INPUT_IME
 bool WM_event_is_ime_switch(const struct wmEvent *event);

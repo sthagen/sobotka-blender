@@ -29,7 +29,6 @@ Checks:  >
   -bugprone-sizeof-expression,
   -bugprone-integer-division,
 
-  -bugprone-exception-escape,
   -bugprone-redundant-branch-condition,
 
   modernize-*,
@@ -38,7 +37,6 @@ Checks:  >
   -modernize-deprecated-headers,
   -modernize-avoid-c-arrays,
   -modernize-use-equals-default,
-  -modernize-concat-nested-namespaces,
   -modernize-use-nodiscard,
   -modernize-use-using,
   -modernize-loop-convert,
