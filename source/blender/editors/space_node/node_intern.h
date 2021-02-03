@@ -37,6 +37,7 @@ struct bContext;
 struct bNode;
 struct bNodeLink;
 struct bNodeSocket;
+struct NodeInsertOfsData;
 struct wmGizmoGroupType;
 struct wmKeyConfig;
 struct wmWindow;
@@ -50,8 +51,26 @@ typedef struct bNodeLinkDrag {
    * This way the links can be added to the node tree while being stored in this list.
    */
   ListBase links;
+  bool from_multi_input_socket;
   int in_out;
 } bNodeLinkDrag;
+
+typedef struct SpaceNode_Runtime {
+  float aspect;
+
+  /** Mouse position for drawing socket-less links and adding nodes. */
+  float cursor[2];
+
+  /** For auto compositing. */
+  bool recalc;
+
+  /** Temporary data for modal linking operator. */
+  struct ListBase linkdrag;
+
+  /* XXX hack for translate_attach op-macros to pass data from transform op to insert_offset op */
+  /** Temporary data for node insert offset (in UI called Auto-offset). */
+  struct NodeInsertOfsData *iofsd;
+} SpaceNode_Runtime;
 
 /* space_node.c */
 

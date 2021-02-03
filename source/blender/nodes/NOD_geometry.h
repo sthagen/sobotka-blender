@@ -47,6 +47,9 @@ void register_node_type_geo_attribute_mix(void);
 void register_node_type_geo_attribute_color_ramp(void);
 void register_node_type_geo_point_rotate(void);
 void register_node_type_geo_align_rotation_to_vector(void);
+void register_node_type_geo_sample_texture(void);
+void register_node_type_geo_points_to_volume(void);
+void register_node_type_geo_collection_info(void);
 
 #ifdef __cplusplus
 }

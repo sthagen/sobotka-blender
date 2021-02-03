@@ -158,6 +158,8 @@ IDTypeInfo IDType_ID_PAL = {
     .blend_read_expand = NULL,
 
     .blend_read_undo_preserve = palette_undo_preserve,
+
+    .lib_override_apply_post = NULL,
 };
 
 static void paint_curve_copy_data(Main *UNUSED(bmain),
@@ -221,6 +223,8 @@ IDTypeInfo IDType_ID_PC = {
     .blend_read_expand = NULL,
 
     .blend_read_undo_preserve = NULL,
+
+    .lib_override_apply_post = NULL,
 };
 
 const char PAINT_CURSOR_SCULPT[3] = {255, 100, 100};
@@ -1485,6 +1489,14 @@ void BKE_sculptsession_free(Object *ob)
       }
       MEM_SAFE_FREE(ss->pose_ik_chain_preview->segments);
       MEM_SAFE_FREE(ss->pose_ik_chain_preview);
+    }
+
+    if (ss->boundary_preview) {
+      MEM_SAFE_FREE(ss->boundary_preview->vertices);
+      MEM_SAFE_FREE(ss->boundary_preview->edges);
+      MEM_SAFE_FREE(ss->boundary_preview->distance);
+      MEM_SAFE_FREE(ss->boundary_preview->edit_info);
+      MEM_SAFE_FREE(ss->boundary_preview);
     }
 
     BKE_sculptsession_free_vwpaint_data(ob->sculpt);
