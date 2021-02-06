@@ -428,7 +428,6 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
 
   BLI_assert(is_zero_v4(t->values_modal_offset));
 
-  bool use_orient_axis = false;
   bool t_values_set_is_array = false;
 
   if (op && (prop = RNA_struct_find_property(op->ptr, "value")) &&
@@ -453,11 +452,6 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
     }
   }
 
-  if (op && (prop = RNA_struct_find_property(op->ptr, "orient_axis"))) {
-    t->orient_axis = RNA_property_enum_get(op->ptr, prop);
-    use_orient_axis = true;
-  }
-
   if (op && (prop = RNA_struct_find_property(op->ptr, "constraint_axis"))) {
     bool constraint_axis[3] = {false, false, false};
     if (t->flag & T_INPUT_IS_VALUES_FINAL) {
@@ -465,9 +459,6 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
         /* For operators whose `t->values` is array, set constraint so that the
          * orientation is more intuitive in the Redo Panel. */
         constraint_axis[0] = constraint_axis[1] = constraint_axis[2] = true;
-      }
-      else if (use_orient_axis) {
-        constraint_axis[t->orient_axis] = true;
       }
     }
     else if (RNA_property_is_set(op->ptr, prop)) {
@@ -497,6 +488,8 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
     short orient_type_set = V3D_ORIENT_GLOBAL;
     short orient_type_matrix_set = -1;
 
+    bool use_orient_axis = false;
+
     if ((t->spacetype == SPACE_VIEW3D) && (t->region->regiontype == RGN_TYPE_WINDOW)) {
       TransformOrientationSlot *orient_slot = &t->scene->orientation_slots[SCE_ORIENT_DEFAULT];
       orient_type_scene = orient_slot->type;
@@ -507,6 +500,11 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
     }
 
     short orient_type_default = orient_type_scene;
+
+    if (op && (prop = RNA_struct_find_property(op->ptr, "orient_axis"))) {
+      t->orient_axis = RNA_property_enum_get(op->ptr, prop);
+      use_orient_axis = true;
+    }
 
     if (op && (prop = RNA_struct_find_property(op->ptr, "orient_axis_ortho"))) {
       t->orient_axis_ortho = RNA_property_enum_get(op->ptr, prop);
@@ -1195,7 +1193,7 @@ void calculateCenter(TransInfo *t)
 
   calculateCenter2D(t);
 
-  /* for panning from cameraview */
+  /* For panning from the camera-view. */
   if ((t->flag & T_OBJECT) && (t->flag & T_OVERRIDE_CENTER) == 0) {
     if (t->spacetype == SPACE_VIEW3D && t->region && t->region->regiontype == RGN_TYPE_WINDOW) {
 
@@ -1418,7 +1416,7 @@ void transform_data_ext_rotate(TransData *td, float mat[3][3], bool use_drot)
   if (td->ext->rotOrder == ROT_MODE_QUAT) {
     float quat[4];
 
-    /* calculate the total rotatation */
+    /* Calculate the total rotation. */
     quat_to_mat3(obmat, td->ext->iquat);
     if (use_drot) {
       mul_m3_m3m3(obmat, dmat, obmat);
@@ -1439,7 +1437,7 @@ void transform_data_ext_rotate(TransData *td, float mat[3][3], bool use_drot)
   else if (td->ext->rotOrder == ROT_MODE_AXISANGLE) {
     float axis[3], angle;
 
-    /* calculate the total rotatation */
+    /* Calculate the total rotation. */
     axis_angle_to_mat3(obmat, td->ext->irotAxis, td->ext->irotAngle);
     if (use_drot) {
       mul_m3_m3m3(obmat, dmat, obmat);
@@ -1461,7 +1459,7 @@ void transform_data_ext_rotate(TransData *td, float mat[3][3], bool use_drot)
   else {
     float eul[3];
 
-    /* calculate the total rotatation */
+    /* Calculate the total rotation. */
     eulO_to_mat3(obmat, td->ext->irot, td->ext->rotOrder);
     if (use_drot) {
       mul_m3_m3m3(obmat, dmat, obmat);
