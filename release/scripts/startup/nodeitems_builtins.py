@@ -491,6 +491,8 @@ geometry_node_categories = [
         NodeItem("GeometryNodeAttributeColorRamp"),
         NodeItem("GeometryNodeAttributeVectorMath"),
         NodeItem("GeometryNodeAttributeSampleTexture"),
+        NodeItem("GeometryNodeAttributeCombineXYZ"),
+        NodeItem("GeometryNodeAttributeSeparateXYZ"),
     ]),
     GeometryNodeCategory("GEO_COLOR", "Color", items=[
         NodeItem("ShaderNodeValToRGB"),
@@ -514,6 +516,7 @@ geometry_node_categories = [
         NodeItem("GeometryNodeTriangulate"),
         NodeItem("GeometryNodeEdgeSplit"),
         NodeItem("GeometryNodeSubdivisionSurface"),
+        NodeItem("GeometryNodeSubdivisionSurfaceSimple"),
     ]),
     GeometryNodeCategory("GEO_POINT", "Point", items=[
         NodeItem("GeometryNodePointDistribute"),
