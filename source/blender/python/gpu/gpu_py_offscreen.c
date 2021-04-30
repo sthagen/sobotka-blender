@@ -53,6 +53,8 @@
 #include "../generic/py_capi_utils.h"
 
 #include "gpu_py.h"
+#include "gpu_py_texture.h"
+
 #include "gpu_py_offscreen.h" /* own include */
 
 /* Define the free method to avoid breakage. */
@@ -96,20 +98,20 @@ static int pygpu_offscreen_valid_check(BPyGPUOffScreen *py_ofs)
 
 typedef struct {
   PyObject_HEAD /* required python macro */
-      BPyGPUOffScreen *py_offs;
+      BPyGPUOffScreen *py_offscreen;
   int level;
   bool is_explicitly_bound; /* Bound by "bind" method. */
 } OffScreenStackContext;
 
 static void pygpu_offscreen_stack_context__tp_dealloc(OffScreenStackContext *self)
 {
-  Py_DECREF(self->py_offs);
+  Py_DECREF(self->py_offscreen);
   PyObject_DEL(self);
 }
 
 static PyObject *pygpu_offscreen_stack_context_enter(OffScreenStackContext *self)
 {
-  BPY_GPU_OFFSCREEN_CHECK_OBJ(self->py_offs);
+  BPY_GPU_OFFSCREEN_CHECK_OBJ(self->py_offscreen);
 
   if (!self->is_explicitly_bound) {
     if (self->level != -1) {
@@ -117,7 +119,7 @@ static PyObject *pygpu_offscreen_stack_context_enter(OffScreenStackContext *self
       return NULL;
     }
 
-    GPU_offscreen_bind(self->py_offs->ofs, true);
+    GPU_offscreen_bind(self->py_offscreen->ofs, true);
     self->level = GPU_framebuffer_stack_level_get();
   }
 
@@ -127,7 +129,7 @@ static PyObject *pygpu_offscreen_stack_context_enter(OffScreenStackContext *self
 static PyObject *pygpu_offscreen_stack_context_exit(OffScreenStackContext *self,
                                                     PyObject *UNUSED(args))
 {
-  BPY_GPU_OFFSCREEN_CHECK_OBJ(self->py_offs);
+  BPY_GPU_OFFSCREEN_CHECK_OBJ(self->py_offscreen);
 
   if (self->level == -1) {
     PyErr_SetString(PyExc_RuntimeError, "Not yet in use\n");
@@ -140,7 +142,7 @@ static PyObject *pygpu_offscreen_stack_context_exit(OffScreenStackContext *self,
         PyExc_RuntimeError, "Level of bind mismatch, expected %d, got %d\n", self->level, level);
   }
 
-  GPU_offscreen_unbind(self->py_offs->ofs, true);
+  GPU_offscreen_unbind(self->py_offscreen->ofs, true);
   Py_RETURN_NONE;
 }
 
@@ -166,7 +168,7 @@ static PyObject *pygpu_offscreen_bind(BPyGPUOffScreen *self)
 {
   OffScreenStackContext *ret = PyObject_New(OffScreenStackContext,
                                             &PyGPUOffscreenStackContext_Type);
-  ret->py_offs = self;
+  ret->py_offscreen = self;
   ret->level = -1;
   ret->is_explicitly_bound = false;
   Py_INCREF(self);
@@ -184,7 +186,7 @@ PyDoc_STRVAR(pygpu_offscreen_unbind_doc,
              "\n"
              "   :arg restore: Restore the OpenGL state, can only be used when the state has been "
              "saved before.\n"
-             "   :type restore: `bool`\n");
+             "   :type restore: bool\n");
 static PyObject *pygpu_offscreen_unbind(BPyGPUOffScreen *self, PyObject *args, PyObject *kwds)
 {
   bool restore = true;
@@ -262,6 +264,17 @@ static PyObject *pygpu_offscreen_color_texture_get(BPyGPUOffScreen *self, void *
   BPY_GPU_OFFSCREEN_CHECK_OBJ(self);
   GPUTexture *texture = GPU_offscreen_color_texture(self->ofs);
   return PyLong_FromLong(GPU_texture_opengl_bindcode(texture));
+}
+
+PyDoc_STRVAR(pygpu_offscreen_texture_color_doc,
+             "The color texture attached.\n"
+             "\n"
+             ":type: :class:`gpu.types.GPUTexture`");
+static PyObject *pygpu_offscreen_texture_color_get(BPyGPUOffScreen *self, void *UNUSED(type))
+{
+  BPY_GPU_OFFSCREEN_CHECK_OBJ(self);
+  GPUTexture *texture = GPU_offscreen_color_texture(self->ofs);
+  return BPyGPUTexture_CreatePyObject(texture, true);
 }
 
 PyDoc_STRVAR(
@@ -385,6 +398,11 @@ static PyGetSetDef pygpu_offscreen__tp_getseters[] = {
      (setter)NULL,
      pygpu_offscreen_color_texture_doc,
      NULL},
+    {"texture_color",
+     (getter)pygpu_offscreen_texture_color_get,
+     (setter)NULL,
+     pygpu_offscreen_texture_color_doc,
+     NULL},
     {"width", (getter)pygpu_offscreen_width_get, (setter)NULL, pygpu_offscreen_width_doc, NULL},
     {"height", (getter)pygpu_offscreen_height_get, (setter)NULL, pygpu_offscreen_height_doc, NULL},
     {NULL, NULL, NULL, NULL, NULL} /* Sentinel */
@@ -412,9 +430,9 @@ PyDoc_STRVAR(pygpu_offscreen__tp_doc,
              "   This object gives access to off screen buffers.\n"
              "\n"
              "   :arg width: Horizontal dimension of the buffer.\n"
-             "   :type width: `int`\n"
+             "   :type width: int\n"
              "   :arg height: Vertical dimension of the buffer.\n"
-             "   :type height: `int`\n");
+             "   :type height: int\n");
 PyTypeObject BPyGPUOffScreen_Type = {
     PyVarObject_HEAD_INIT(NULL, 0).tp_name = "GPUOffScreen",
     .tp_basicsize = sizeof(BPyGPUOffScreen),

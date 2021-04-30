@@ -990,18 +990,14 @@ static int colbalance_seq_cmp_fn(Sequence *seq, void *arg_pt)
 {
   SequenceSearchData *data = arg_pt;
 
-  if (seq->modifiers.first) {
-    SequenceModifierData *smd = seq->modifiers.first;
+  for (SequenceModifierData *smd = seq->modifiers.first; smd; smd = smd->next) {
+    if (smd->type == seqModifierType_ColorBalance) {
+      ColorBalanceModifierData *cbmd = (ColorBalanceModifierData *)smd;
 
-    for (smd = seq->modifiers.first; smd; smd = smd->next) {
-      if (smd->type == seqModifierType_ColorBalance) {
-        ColorBalanceModifierData *cbmd = (ColorBalanceModifierData *)smd;
-
-        if (&cbmd->color_balance == data->data) {
-          data->seq = seq;
-          data->smd = smd;
-          return -1; /* done so bail out */
-        }
+      if (&cbmd->color_balance == data->data) {
+        data->seq = seq;
+        data->smd = smd;
+        return -1; /* done so bail out */
       }
     }
   }
@@ -2865,7 +2861,7 @@ static void rna_def_text(StructRNA *srna)
   RNA_def_property_int_sdna(prop, NULL, "text_size");
   RNA_def_property_ui_text(prop, "Size", "Size of the text");
   RNA_def_property_range(prop, 0.0, 2000);
-  RNA_def_property_ui_range(prop, 0.0f, 1000, 1, -1);
+  RNA_def_property_ui_range(prop, 0.0f, 2000, 1, -1);
   RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Sequence_invalidate_raw_update");
 
   prop = RNA_def_property(srna, "color", PROP_FLOAT, PROP_COLOR_GAMMA);
@@ -2887,7 +2883,7 @@ static void rna_def_text(StructRNA *srna)
   RNA_def_property_float_sdna(prop, NULL, "loc");
   RNA_def_property_ui_text(prop, "Location", "Location of the text");
   RNA_def_property_range(prop, -FLT_MAX, FLT_MAX);
-  RNA_def_property_ui_range(prop, 0.0, 1.0, 1, -1);
+  RNA_def_property_ui_range(prop, -10.0, 10.0, 1, -1);
   RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Sequence_invalidate_raw_update");
 
   prop = RNA_def_property(srna, "wrap_width", PROP_FLOAT, PROP_NONE);
@@ -2931,6 +2927,16 @@ static void rna_def_text(StructRNA *srna)
   prop = RNA_def_property(srna, "use_box", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "flag", SEQ_TEXT_BOX);
   RNA_def_property_ui_text(prop, "Shadow", "Display colored box behind text");
+  RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Sequence_invalidate_raw_update");
+
+  prop = RNA_def_property(srna, "use_bold", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", SEQ_TEXT_BOLD);
+  RNA_def_property_ui_text(prop, "Bold", "Display text as bold");
+  RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Sequence_invalidate_raw_update");
+
+  prop = RNA_def_property(srna, "use_italic", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", SEQ_TEXT_ITALIC);
+  RNA_def_property_ui_text(prop, "Italic", "Display text as italic");
   RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Sequence_invalidate_raw_update");
 }
 
