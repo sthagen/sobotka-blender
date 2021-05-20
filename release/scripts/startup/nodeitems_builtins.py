@@ -494,6 +494,7 @@ geometry_node_categories = [
         NodeItem("GeometryNodeAttributeProximity"),
         NodeItem("GeometryNodeAttributeColorRamp"),
         NodeItem("GeometryNodeAttributeVectorMath"),
+        NodeItem("GeometryNodeAttributeVectorRotate"),
         NodeItem("GeometryNodeAttributeSampleTexture"),
         NodeItem("GeometryNodeAttributeCombineXYZ"),
         NodeItem("GeometryNodeAttributeSeparateXYZ"),
@@ -522,7 +523,11 @@ geometry_node_categories = [
         NodeItem("ShaderNodeValue"),
         NodeItem("FunctionNodeInputString"),
         NodeItem("FunctionNodeInputVector"),
+        NodeItem("GeometryNodeInputMaterial"),
         NodeItem("GeometryNodeIsViewport"),
+    ]),
+    GeometryNodeCategory("GEO_MATERIAL", "Material", items=[
+        NodeItem("GeometryNodeMaterialAssign"),
     ]),
     GeometryNodeCategory("GEO_MESH", "Mesh", items=[
         NodeItem("GeometryNodeBoolean"),
