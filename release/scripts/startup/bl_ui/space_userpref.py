@@ -605,6 +605,23 @@ class USERPREF_PT_system_cycles_devices(SystemPanel, CenterAlignMixIn, Panel):
         #     col.row().prop(system, "opensubdiv_compute_type", text="")
 
 
+class USERPREF_PT_system_os_settings(SystemPanel, CenterAlignMixIn, Panel):
+    bl_label = "Operating System Settings"
+
+    @classmethod
+    def poll(cls, _context):
+        # Only for Windows so far
+        import sys
+        return sys.platform[:3] == "win"
+
+    def draw_centered(self, _context, layout):
+        layout.label(text="Make this installation your default Blender")
+        split = layout.split(factor=0.4)
+        split.alignment = 'RIGHT'
+        split.label(text="")
+        split.operator("file.associate_blend", text="Make Default")
+
+
 class USERPREF_PT_system_memory(SystemPanel, CenterAlignMixIn, Panel):
     bl_label = "Memory & Limits"
 
@@ -1373,7 +1390,6 @@ class USERPREF_PT_file_paths_asset_libraries(FilePathsPanel, Panel):
         row = path_col.row(align=True)  # Padding
         row.separator()
         row.label(text="Path")
-
 
         for i, library in enumerate(paths.asset_libraries):
             name_col.prop(library, "name", text="")
@@ -2324,6 +2340,7 @@ classes = (
     USERPREF_PT_animation_fcurves,
 
     USERPREF_PT_system_cycles_devices,
+    USERPREF_PT_system_os_settings,
     USERPREF_PT_system_memory,
     USERPREF_PT_system_video_sequencer,
     USERPREF_PT_system_sound,

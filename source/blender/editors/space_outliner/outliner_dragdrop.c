@@ -1325,7 +1325,7 @@ static TreeElement *outliner_item_drag_element_find(SpaceOutliner *space_outline
                                                     ARegion *region,
                                                     const wmEvent *event)
 {
-  /* note: using EVT_TWEAK_ events to trigger dragging is fine,
+  /* NOTE: using EVT_TWEAK_ events to trigger dragging is fine,
    * it sends coordinates from where dragging was started */
   const float my = UI_view2d_region_to_view_y(&region->v2d, event->mval[1]);
   return outliner_find_item_at_y(space_outliner, &space_outliner->tree, my);
@@ -1365,7 +1365,7 @@ static int outliner_item_drag_drop_invoke(bContext *C,
     wmOperatorType *ot = WM_operatortype_find("VIEW2D_OT_edge_pan", true);
     PointerRNA op_ptr;
     WM_operator_properties_create_ptr(&op_ptr, ot);
-    RNA_int_set(&op_ptr, "outside_padding", OUTLINER_DRAG_SCOLL_OUTSIDE_PAD);
+    RNA_float_set(&op_ptr, "outside_padding", OUTLINER_DRAG_SCOLL_OUTSIDE_PAD);
     WM_operator_name_call_ptr(C, ot, WM_OP_INVOKE_DEFAULT, &op_ptr);
     WM_operator_properties_free(&op_ptr);
   }

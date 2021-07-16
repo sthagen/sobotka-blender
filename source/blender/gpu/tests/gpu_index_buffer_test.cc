@@ -10,7 +10,7 @@
 
 namespace blender::gpu::tests {
 
-TEST_F(GPUTest, gpu_index_buffer_subbuilders)
+static void test_gpu_index_buffer_subbuilders()
 {
   const uint num_subbuilders = 10;
   const uint verts_per_subbuilders = 100;
@@ -21,7 +21,7 @@ TEST_F(GPUTest, gpu_index_buffer_subbuilders)
 
   GPUIndexBufBuilder subbuilders[num_subbuilders];
   for (int subbuilder_index = 0; subbuilder_index < num_subbuilders; subbuilder_index++) {
-    GPU_indexbuf_subbuilder_init(&builder, &subbuilders[subbuilder_index]);
+    memcpy(&subbuilders[subbuilder_index], &builder, sizeof(builder));
   }
 
   for (int subbuilder_index = 0; subbuilder_index < num_subbuilders; subbuilder_index++) {
@@ -35,7 +35,7 @@ TEST_F(GPUTest, gpu_index_buffer_subbuilders)
 
   for (int subbuilder_index = 0; subbuilder_index < num_subbuilders; subbuilder_index++) {
     EXPECT_EQ(builder.index_len, subbuilder_index * verts_per_subbuilders);
-    GPU_indexbuf_subbuilder_finish(&builder, &subbuilders[subbuilder_index]);
+    GPU_indexbuf_join(&builder, &subbuilders[subbuilder_index]);
     EXPECT_EQ(builder.index_len, (subbuilder_index + 1) * verts_per_subbuilders);
   }
 
@@ -43,5 +43,7 @@ TEST_F(GPUTest, gpu_index_buffer_subbuilders)
   EXPECT_NE(index_buffer, nullptr);
   GPU_INDEXBUF_DISCARD_SAFE(index_buffer);
 }
+
+GPU_TEST(gpu_index_buffer_subbuilders)
 
 }  // namespace blender::gpu::tests
