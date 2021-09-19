@@ -118,6 +118,7 @@
 #include "intern/node/deg_node_operation.h"
 #include "intern/node/deg_node_time.h"
 
+#include "intern/depsgraph.h"
 #include "intern/depsgraph_relation.h"
 #include "intern/depsgraph_type.h"
 
@@ -543,12 +544,13 @@ void DepsgraphRelationBuilder::build_id(ID *id)
       build_movieclip((MovieClip *)id);
       break;
     case ID_ME:
-    case ID_CU:
     case ID_MB:
+    case ID_CU:
     case ID_LT:
     case ID_HA:
     case ID_PT:
     case ID_VO:
+    case ID_GD:
       build_object_data_geometry_datablock(id);
       break;
     case ID_SPK:
@@ -571,9 +573,6 @@ void DepsgraphRelationBuilder::build_id(ID *id)
       break;
     case ID_PA:
       build_particle_settings((ParticleSettings *)id);
-      break;
-    case ID_GD:
-      build_gpencil((bGPdata *)id);
       break;
 
     case ID_LI:
@@ -647,7 +646,7 @@ void DepsgraphRelationBuilder::build_collection(LayerCollection *from_layer_coll
 
       /* Only create geometry relations to child objects, if they have a geometry component. */
       OperationKey object_geometry_key{
-          &cob->ob->id, NodeType::GEOMETRY, OperationCode::GEOMETRY_EVAL_INIT};
+          &cob->ob->id, NodeType::GEOMETRY, OperationCode::GEOMETRY_EVAL};
       if (find_node(object_geometry_key) != nullptr) {
         add_relation(object_geometry_key, collection_geometry_key, "Collection Geometry");
       }
@@ -1007,11 +1006,13 @@ void DepsgraphRelationBuilder::build_object_parent(Object *object)
 
     /* Bone Parent */
     case PARBONE: {
-      ComponentKey parent_bone_key(parent_id, NodeType::BONE, object->parsubstr);
-      OperationKey parent_transform_key(
-          parent_id, NodeType::TRANSFORM, OperationCode::TRANSFORM_FINAL);
-      add_relation(parent_bone_key, object_transform_key, "Bone Parent");
-      add_relation(parent_transform_key, object_transform_key, "Armature Parent");
+      if (object->parsubstr[0] != '\0') {
+        ComponentKey parent_bone_key(parent_id, NodeType::BONE, object->parsubstr);
+        OperationKey parent_transform_key(
+            parent_id, NodeType::TRANSFORM, OperationCode::TRANSFORM_FINAL);
+        add_relation(parent_bone_key, object_transform_key, "Bone Parent");
+        add_relation(parent_transform_key, object_transform_key, "Armature Parent");
+      }
       break;
     }
 
@@ -1098,8 +1099,7 @@ void DepsgraphRelationBuilder::build_object_pointcache(Object *object)
     }
     else {
       flag = FLAG_GEOMETRY;
-      OperationKey geometry_key(
-          &object->id, NodeType::GEOMETRY, OperationCode::GEOMETRY_EVAL_INIT);
+      OperationKey geometry_key(&object->id, NodeType::GEOMETRY, OperationCode::GEOMETRY_EVAL);
       add_relation(point_cache_key, geometry_key, "Point Cache -> Geometry");
     }
     BLI_assert(flag != -1);
@@ -1869,8 +1869,7 @@ void DepsgraphRelationBuilder::build_rigidbody(Scene *scene)
 void DepsgraphRelationBuilder::build_particle_systems(Object *object)
 {
   TimeSourceKey time_src_key;
-  OperationKey obdata_ubereval_key(
-      &object->id, NodeType::GEOMETRY, OperationCode::GEOMETRY_EVAL_INIT);
+  OperationKey obdata_ubereval_key(&object->id, NodeType::GEOMETRY, OperationCode::GEOMETRY_EVAL);
   OperationKey eval_init_key(
       &object->id, NodeType::PARTICLE_SYSTEM, OperationCode::PARTICLE_SYSTEM_INIT);
   OperationKey eval_done_key(
@@ -2018,8 +2017,7 @@ void DepsgraphRelationBuilder::build_particle_system_visualization_object(Object
 {
   OperationKey psys_key(
       &object->id, NodeType::PARTICLE_SYSTEM, OperationCode::PARTICLE_SYSTEM_EVAL, psys->name);
-  OperationKey obdata_ubereval_key(
-      &object->id, NodeType::GEOMETRY, OperationCode::GEOMETRY_EVAL_INIT);
+  OperationKey obdata_ubereval_key(&object->id, NodeType::GEOMETRY, OperationCode::GEOMETRY_EVAL);
   ComponentKey dup_ob_key(&draw_object->id, NodeType::TRANSFORM);
   add_relation(dup_ob_key, psys_key, "Particle Object Visualization");
   if (draw_object->type == OB_MBALL) {
@@ -2076,15 +2074,15 @@ void DepsgraphRelationBuilder::build_object_data_geometry(Object *object)
   /* Get nodes for result of obdata's evaluation, and geometry evaluation
    * on object. */
   ComponentKey obdata_geom_key(obdata, NodeType::GEOMETRY);
-  OperationKey obdata_ubereval_key(&object->id, NodeType::GEOMETRY, OperationCode::GEOMETRY_EVAL);
+  ComponentKey geom_key(&object->id, NodeType::GEOMETRY);
   /* Link components to each other. */
-  add_relation(obdata_geom_key, obdata_ubereval_key, "Object Geometry Base Data");
-
+  add_relation(obdata_geom_key, geom_key, "Object Geometry Base Data");
+  OperationKey obdata_ubereval_key(&object->id, NodeType::GEOMETRY, OperationCode::GEOMETRY_EVAL);
   /* Special case: modifiers evaluation queries scene for various things like
    * data mask to be used. We add relation here to ensure object is never
    * evaluated prior to Scene's CoW is ready. */
   OperationKey scene_key(&scene_->id, NodeType::PARAMETERS, OperationCode::SCENE_EVAL);
-  Relation *rel = add_relation(scene_key, geom_init_key, "CoW Relation");
+  Relation *rel = add_relation(scene_key, obdata_ubereval_key, "CoW Relation");
   rel->flag |= RELATION_FLAG_NO_FLUSH;
   /* Modifiers */
   if (object->modifiers.first != nullptr) {
@@ -2094,13 +2092,13 @@ void DepsgraphRelationBuilder::build_object_data_geometry(Object *object)
     LISTBASE_FOREACH (ModifierData *, md, &object->modifiers) {
       const ModifierTypeInfo *mti = BKE_modifier_get_info((ModifierType)md->type);
       if (mti->updateDepsgraph) {
-        DepsNodeHandle handle = create_node_handle(geom_init_key);
+        DepsNodeHandle handle = create_node_handle(obdata_ubereval_key);
         ctx.node = reinterpret_cast<::DepsNodeHandle *>(&handle);
         mti->updateDepsgraph(md, &ctx);
       }
-      if (BKE_object_modifier_use_time(object, md)) {
+      if (BKE_object_modifier_use_time(scene_, object, md, graph_->mode)) {
         TimeSourceKey time_src_key;
-        add_relation(time_src_key, geom_init_key, "Time Source");
+        add_relation(time_src_key, obdata_ubereval_key, "Time Source");
       }
     }
   }
@@ -2113,13 +2111,13 @@ void DepsgraphRelationBuilder::build_object_data_geometry(Object *object)
       const GpencilModifierTypeInfo *mti = BKE_gpencil_modifier_get_info(
           (GpencilModifierType)md->type);
       if (mti->updateDepsgraph) {
-        DepsNodeHandle handle = create_node_handle(geom_init_key);
+        DepsNodeHandle handle = create_node_handle(obdata_ubereval_key);
         ctx.node = reinterpret_cast<::DepsNodeHandle *>(&handle);
         mti->updateDepsgraph(md, &ctx, graph_->mode);
       }
       if (BKE_object_modifier_gpencil_use_time(object, md)) {
         TimeSourceKey time_src_key;
-        add_relation(time_src_key, geom_init_key, "Time Source");
+        add_relation(time_src_key, obdata_ubereval_key, "Time Source");
       }
     }
   }
@@ -2131,13 +2129,13 @@ void DepsgraphRelationBuilder::build_object_data_geometry(Object *object)
     LISTBASE_FOREACH (ShaderFxData *, fx, &object->shader_fx) {
       const ShaderFxTypeInfo *fxi = BKE_shaderfx_get_info((ShaderFxType)fx->type);
       if (fxi->updateDepsgraph) {
-        DepsNodeHandle handle = create_node_handle(geom_init_key);
+        DepsNodeHandle handle = create_node_handle(obdata_ubereval_key);
         ctx.node = reinterpret_cast<::DepsNodeHandle *>(&handle);
         fxi->updateDepsgraph(fx, &ctx);
       }
       if (BKE_object_shaderfx_use_time(object, fx)) {
         TimeSourceKey time_src_key;
-        add_relation(time_src_key, geom_init_key, "Time Source");
+        add_relation(time_src_key, obdata_ubereval_key, "Time Source");
       }
     }
   }
@@ -2163,7 +2161,6 @@ void DepsgraphRelationBuilder::build_object_data_geometry(Object *object)
       add_relation(mom_transform_key, mom_geom_key, "Metaball Motherball Transform -> Geometry");
     }
     else {
-      ComponentKey geom_key(&object->id, NodeType::GEOMETRY);
       ComponentKey transform_key(&object->id, NodeType::TRANSFORM);
       add_relation(geom_key, mom_geom_key, "Metaball Motherball");
       add_relation(transform_key, mom_geom_key, "Metaball Motherball");
@@ -2178,7 +2175,9 @@ void DepsgraphRelationBuilder::build_object_data_geometry(Object *object)
    * Ideally we need to get rid of this relation. */
   if (object_particles_depends_on_time(object)) {
     TimeSourceKey time_key;
-    add_relation(time_key, geom_init_key, "Legacy particle time");
+    OperationKey obdata_ubereval_key(
+        &object->id, NodeType::GEOMETRY, OperationCode::GEOMETRY_EVAL);
+    add_relation(time_key, obdata_ubereval_key, "Legacy particle time");
   }
   /* Object data data-block. */
   build_object_data_geometry_datablock((ID *)object->data);
@@ -2200,33 +2199,12 @@ void DepsgraphRelationBuilder::build_object_data_geometry(Object *object)
   add_relation(final_geometry_key, synchronize_key, "Synchronize to Original");
   /* Batch cache. */
   OperationKey object_data_select_key(
-      obdata, NodeType::BATCH_CACHE, OperationCode::BATCH_UPDATE_SELECT);
+      obdata, NodeType::BATCH_CACHE, OperationCode::GEOMETRY_SELECT_UPDATE);
   OperationKey object_select_key(
-      &object->id, NodeType::BATCH_CACHE, OperationCode::BATCH_UPDATE_SELECT);
-
+      &object->id, NodeType::BATCH_CACHE, OperationCode::GEOMETRY_SELECT_UPDATE);
   add_relation(object_data_select_key, object_select_key, "Data Selection -> Object Selection");
-  add_relation(final_geometry_key,
-               object_select_key,
-               "Object Geometry -> Select Update",
-               RELATION_FLAG_NO_FLUSH);
-
-  OperationKey object_data_geom_deform_key(
-      obdata, NodeType::GEOMETRY, OperationCode::GEOMETRY_EVAL_DEFORM);
-  OperationKey object_data_geom_init_key(
-      obdata, NodeType::GEOMETRY, OperationCode::GEOMETRY_EVAL_INIT);
-
-  OperationKey object_data_batch_deform_key(
-      obdata, NodeType::BATCH_CACHE, OperationCode::BATCH_UPDATE_DEFORM);
-  OperationKey object_data_batch_all_key(
-      obdata, NodeType::BATCH_CACHE, OperationCode::BATCH_UPDATE_ALL);
-
-  add_relation(geom_init_key, object_data_batch_all_key, "Object Geometry -> Batch Update All");
-
   add_relation(
-      object_data_geom_init_key, object_data_batch_all_key, "Data Init -> Batch Update All");
-  add_relation(object_data_geom_deform_key,
-               object_data_batch_deform_key,
-               "Data Deform -> Batch Update Deform");
+      geom_key, object_select_key, "Object Geometry -> Select Update", RELATION_FLAG_NO_FLUSH);
 }
 
 void DepsgraphRelationBuilder::build_object_data_geometry_datablock(ID *obdata)
@@ -2244,14 +2222,14 @@ void DepsgraphRelationBuilder::build_object_data_geometry_datablock(ID *obdata)
     build_shapekeys(key);
   }
   /* Link object data evaluation node to exit operation. */
-  OperationKey obdata_geom_deform_key(
-      obdata, NodeType::GEOMETRY, OperationCode::GEOMETRY_EVAL_DEFORM);
-  OperationKey obdata_geom_init_key(obdata, NodeType::GEOMETRY, OperationCode::GEOMETRY_EVAL_INIT);
   OperationKey obdata_geom_eval_key(obdata, NodeType::GEOMETRY, OperationCode::GEOMETRY_EVAL);
   OperationKey obdata_geom_done_key(obdata, NodeType::GEOMETRY, OperationCode::GEOMETRY_EVAL_DONE);
-  add_relation(obdata_geom_init_key, obdata_geom_eval_key, "ObData Init -> Geom Eval");
-  add_relation(obdata_geom_deform_key, obdata_geom_eval_key, "ObData Deform -> Geom Eval");
   add_relation(obdata_geom_eval_key, obdata_geom_done_key, "ObData Geom Eval Done");
+
+  /* Link object data evaluation to parameter evaluation. */
+  ComponentKey parameters_key(obdata, NodeType::PARAMETERS);
+  add_relation(parameters_key, obdata_geom_eval_key, "ObData Geom Params");
+
   /* Type-specific links. */
   const ID_Type id_type = GS(obdata->name);
   switch (id_type) {
@@ -2631,18 +2609,6 @@ void DepsgraphRelationBuilder::build_image(Image *image)
   build_parameters(&image->id);
 }
 
-void DepsgraphRelationBuilder::build_gpencil(bGPdata *gpd)
-{
-  if (built_map_.checkIsBuiltAndTag(gpd)) {
-    return;
-  }
-  /* animation */
-  build_animdata(&gpd->id);
-  build_parameters(&gpd->id);
-
-  // TODO: parent object (when that feature is implemented)
-}
-
 void DepsgraphRelationBuilder::build_cachefile(CacheFile *cache_file)
 {
   if (built_map_.checkIsBuiltAndTag(cache_file)) {
@@ -2791,6 +2757,45 @@ void DepsgraphRelationBuilder::build_simulation(Simulation *simulation)
   add_relation(nodetree_key, simulation_eval_key, "NodeTree -> Simulation", 0);
 }
 
+using Seq_build_prop_cb_data = struct Seq_build_prop_cb_data {
+  DepsgraphRelationBuilder *builder;
+  ComponentKey sequencer_key;
+  bool has_audio_strips;
+};
+
+static bool seq_build_prop_cb(Sequence *seq, void *user_data)
+{
+  Seq_build_prop_cb_data *cd = (Seq_build_prop_cb_data *)user_data;
+
+  cd->builder->build_idproperties(seq->prop);
+  if (seq->sound != nullptr) {
+    cd->builder->build_sound(seq->sound);
+    ComponentKey sound_key(&seq->sound->id, NodeType::AUDIO);
+    cd->builder->add_relation(sound_key, cd->sequencer_key, "Sound -> Sequencer");
+    cd->has_audio_strips = true;
+  }
+  if (seq->scene != nullptr) {
+    cd->builder->build_scene_parameters(seq->scene);
+    /* This is to support 3D audio. */
+    cd->has_audio_strips = true;
+  }
+  if (seq->type == SEQ_TYPE_SCENE && seq->scene != nullptr) {
+    if (seq->flag & SEQ_SCENE_STRIPS) {
+      cd->builder->build_scene_sequencer(seq->scene);
+      ComponentKey sequence_scene_audio_key(&seq->scene->id, NodeType::AUDIO);
+      cd->builder->add_relation(
+          sequence_scene_audio_key, cd->sequencer_key, "Sequence Scene Audio -> Sequencer");
+      ComponentKey sequence_scene_key(&seq->scene->id, NodeType::SEQUENCER);
+      cd->builder->add_relation(
+          sequence_scene_key, cd->sequencer_key, "Sequence Scene -> Sequencer");
+    }
+    ViewLayer *sequence_view_layer = BKE_view_layer_default_render(seq->scene);
+    cd->builder->build_scene_speakers(seq->scene, sequence_view_layer);
+  }
+  /* TODO(sergey): Movie clip, camera, mask. */
+  return true;
+}
+
 void DepsgraphRelationBuilder::build_scene_sequencer(Scene *scene)
 {
   if (scene->ed == nullptr) {
@@ -2803,36 +2808,11 @@ void DepsgraphRelationBuilder::build_scene_sequencer(Scene *scene)
   ComponentKey scene_audio_key(&scene->id, NodeType::AUDIO);
   /* Make sure dependencies from sequences data goes to the sequencer evaluation. */
   ComponentKey sequencer_key(&scene->id, NodeType::SEQUENCER);
-  Sequence *seq;
-  bool has_audio_strips = false;
-  SEQ_ALL_BEGIN (scene->ed, seq) {
-    build_idproperties(seq->prop);
-    if (seq->sound != nullptr) {
-      build_sound(seq->sound);
-      ComponentKey sound_key(&seq->sound->id, NodeType::AUDIO);
-      add_relation(sound_key, sequencer_key, "Sound -> Sequencer");
-      has_audio_strips = true;
-    }
-    if (seq->scene != nullptr) {
-      build_scene_parameters(seq->scene);
-      /* This is to support 3D audio. */
-      has_audio_strips = true;
-    }
-    if (seq->type == SEQ_TYPE_SCENE && seq->scene != nullptr) {
-      if (seq->flag & SEQ_SCENE_STRIPS) {
-        build_scene_sequencer(seq->scene);
-        ComponentKey sequence_scene_audio_key(&seq->scene->id, NodeType::AUDIO);
-        add_relation(sequence_scene_audio_key, sequencer_key, "Sequence Scene Audio -> Sequencer");
-        ComponentKey sequence_scene_key(&seq->scene->id, NodeType::SEQUENCER);
-        add_relation(sequence_scene_key, sequencer_key, "Sequence Scene -> Sequencer");
-      }
-      ViewLayer *sequence_view_layer = BKE_view_layer_default_render(seq->scene);
-      build_scene_speakers(seq->scene, sequence_view_layer);
-    }
-    /* TODO(sergey): Movie clip, camera, mask. */
-  }
-  SEQ_ALL_END;
-  if (has_audio_strips) {
+
+  Seq_build_prop_cb_data cb_data = {this, sequencer_key, false};
+
+  SEQ_for_each_callback(&scene->ed->seqbase, seq_build_prop_cb, &cb_data);
+  if (cb_data.has_audio_strips) {
     add_relation(sequencer_key, scene_audio_key, "Sequencer -> Audio");
   }
 }

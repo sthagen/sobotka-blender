@@ -69,16 +69,19 @@ set(SRC
   intern/CCGSubSurf_util.c
   intern/DerivedMesh.cc
   intern/action.c
+  intern/action_bones.cc
   intern/action_mirror.c
   intern/addon.c
   intern/anim_data.c
   intern/anim_path.c
   intern/anim_sys.c
   intern/anim_visualization.c
+  intern/anonymous_attribute.cc
   intern/appdir.c
   intern/armature.c
   intern/armature_deform.c
   intern/armature_pose.cc
+  intern/armature_selection.cc
   intern/armature_update.c
   intern/asset.cc
   intern/attribute.c
@@ -143,7 +146,7 @@ set(SRC
   intern/geometry_set_instances.cc
   intern/gpencil.c
   intern/gpencil_curve.c
-  intern/gpencil_geom.c
+  intern/gpencil_geom.cc
   intern/gpencil_modifier.c
   intern/hair.c
   intern/icons.cc
@@ -183,7 +186,7 @@ set(SRC
   intern/mball_tessellate.c
   intern/mesh.c
   intern/mesh_boolean_convert.cc
-  intern/mesh_convert.c
+  intern/mesh_convert.cc
   intern/mesh_evaluate.cc
   intern/mesh_fair.cc
   intern/mesh_iterators.c
@@ -192,7 +195,7 @@ set(SRC
   intern/mesh_mirror.c
   intern/mesh_normals.cc
   intern/mesh_remap.c
-  intern/mesh_remesh_voxel.c
+  intern/mesh_remesh_voxel.cc
   intern/mesh_runtime.c
   intern/mesh_sample.cc
   intern/mesh_tangent.c
@@ -287,13 +290,17 @@ set(SRC
 
   BKE_DerivedMesh.h
   BKE_action.h
+  BKE_action.hh
   BKE_addon.h
   BKE_anim_data.h
   BKE_anim_path.h
   BKE_anim_visualization.h
   BKE_animsys.h
+  BKE_anonymous_attribute.h
+  BKE_anonymous_attribute.hh
   BKE_appdir.h
   BKE_armature.h
+  BKE_armature.hh
   BKE_asset.h
   BKE_attribute.h
   BKE_attribute_access.hh
@@ -692,6 +699,13 @@ if(WITH_ALEMBIC)
     ../io/alembic
   )
   add_definitions(-DWITH_ALEMBIC)
+endif()
+
+if(WITH_USD)
+  list(APPEND INC
+    ../io/usd
+  )
+  add_definitions(-DWITH_USD)
 endif()
 
 if(WITH_OPENSUBDIV)

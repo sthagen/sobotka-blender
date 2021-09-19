@@ -299,7 +299,7 @@ static void pick_input_link_by_link_intersect(const bContext *C,
 
   /* If no linked was picked in this call, try using the one picked in the previous call.
    * Not essential for the basic behavior, but can make interaction feel a bit better if
-   * the  mouse moves to the right and loses the "selection." */
+   * the mouse moves to the right and loses the "selection." */
   if (!link_to_pick) {
     bNodeLink *last_picked_link = nldrag->last_picked_multi_input_socket_link;
     if (last_picked_link) {
@@ -664,9 +664,19 @@ static int node_link_viewer(const bContext *C, bNode *tonode)
       nodeRemLink(snode->edittree, link);
 
       /* find a socket after the previously connected socket */
-      for (sock = sock->next; sock; sock = sock->next) {
-        if (!nodeSocketIsHidden(sock)) {
-          break;
+      if (ED_node_is_geometry(snode)) {
+        /* Geometry nodes viewer only supports geometry sockets for now. */
+        for (sock = sock->next; sock; sock = sock->next) {
+          if (sock->type == SOCK_GEOMETRY && !nodeSocketIsHidden(sock)) {
+            break;
+          }
+        }
+      }
+      else {
+        for (sock = sock->next; sock; sock = sock->next) {
+          if (!nodeSocketIsHidden(sock)) {
+            break;
+          }
         }
       }
     }
@@ -674,19 +684,40 @@ static int node_link_viewer(const bContext *C, bNode *tonode)
 
   if (tonode) {
     /* Find a selected socket that overrides the socket to connect to */
-    LISTBASE_FOREACH (bNodeSocket *, sock2, &tonode->outputs) {
-      if (!nodeSocketIsHidden(sock2) && sock2->flag & SELECT) {
-        sock = sock2;
-        break;
+    if (ED_node_is_geometry(snode)) {
+      /* Geometry nodes viewer only supports geometry sockets for now. */
+      LISTBASE_FOREACH (bNodeSocket *, sock2, &tonode->outputs) {
+        if (sock2->type == SOCK_GEOMETRY && !nodeSocketIsHidden(sock2) && sock2->flag & SELECT) {
+          sock = sock2;
+          break;
+        }
+      }
+    }
+    else {
+      LISTBASE_FOREACH (bNodeSocket *, sock2, &tonode->outputs) {
+        if (!nodeSocketIsHidden(sock2) && sock2->flag & SELECT) {
+          sock = sock2;
+          break;
+        }
       }
     }
   }
 
   /* find a socket starting from the first socket */
   if (!sock) {
-    for (sock = (bNodeSocket *)tonode->outputs.first; sock; sock = sock->next) {
-      if (!nodeSocketIsHidden(sock)) {
-        break;
+    if (ED_node_is_geometry(snode)) {
+      /* Geometry nodes viewer only supports geometry sockets for now. */
+      for (sock = (bNodeSocket *)tonode->outputs.first; sock; sock = sock->next) {
+        if (sock->type == SOCK_GEOMETRY && !nodeSocketIsHidden(sock)) {
+          break;
+        }
+      }
+    }
+    else {
+      for (sock = (bNodeSocket *)tonode->outputs.first; sock; sock = sock->next) {
+        if (!nodeSocketIsHidden(sock)) {
+          break;
+        }
       }
     }
   }
@@ -849,6 +880,8 @@ static void node_link_exit(bContext *C, wmOperator *op, bool apply_links)
   bNodeTree *ntree = snode->edittree;
   bNodeLinkDrag *nldrag = (bNodeLinkDrag *)op->customdata;
   bool do_tag_update = false;
+  /* View will be reset if no links connect. */
+  bool reset_view = true;
 
   /* avoid updates while applying links */
   ntree->is_updating = true;
@@ -886,6 +919,8 @@ static void node_link_exit(bContext *C, wmOperator *op, bool apply_links)
       if (link->tonode) {
         do_tag_update |= (do_tag_update || node_connected_to_output(bmain, ntree, link->tonode));
       }
+
+      reset_view = false;
     }
     else {
       nodeRemLink(ntree, link);
@@ -897,6 +932,10 @@ static void node_link_exit(bContext *C, wmOperator *op, bool apply_links)
   snode_notify(C, snode);
   if (do_tag_update) {
     snode_dag_update(C, snode);
+  }
+
+  if (reset_view) {
+    UI_view2d_edge_pan_cancel(C, &nldrag->pan_data);
   }
 
   BLI_remlink(&snode->runtime->linkdrag, nldrag);
@@ -1176,6 +1215,8 @@ static void node_link_cancel(bContext *C, wmOperator *op)
 
   BLI_remlink(&snode->runtime->linkdrag, nldrag);
 
+  UI_view2d_edge_pan_cancel(C, &nldrag->pan_data);
+
   BLI_freelistN(&nldrag->links);
   MEM_freeN(nldrag);
   clear_picking_highlight(&snode->edittree->links);
@@ -1227,7 +1268,8 @@ void NODE_OT_link(wmOperatorType *ot)
                                             NODE_EDGE_PAN_OUTSIDE_PAD,
                                             NODE_EDGE_PAN_SPEED_RAMP,
                                             NODE_EDGE_PAN_MAX_SPEED,
-                                            NODE_EDGE_PAN_DELAY);
+                                            NODE_EDGE_PAN_DELAY,
+                                            NODE_EDGE_PAN_ZOOM_INFLUENCE);
 }
 
 /** \} */
@@ -1385,7 +1427,7 @@ void NODE_OT_links_cut(wmOperatorType *ot)
   ot->poll = ED_operator_node_editable;
 
   /* flags */
-  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_DEPENDS_ON_CURSOR;
 
   /* properties */
   PropertyRNA *prop;
@@ -1491,7 +1533,7 @@ void NODE_OT_links_mute(wmOperatorType *ot)
   ot->poll = ED_operator_node_editable;
 
   /* flags */
-  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_DEPENDS_ON_CURSOR;
 
   /* properties */
   PropertyRNA *prop;

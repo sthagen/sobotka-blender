@@ -99,6 +99,13 @@ SocketLog &ModifierLog::lookup_or_add_socket_log(LogByTreeContext &log_by_tree_c
   return socket_log;
 }
 
+void ModifierLog::foreach_node_log(FunctionRef<void(const NodeLog &)> fn) const
+{
+  if (root_tree_logs_) {
+    root_tree_logs_->foreach_node_log(fn);
+  }
+}
+
 const NodeLog *TreeLog::lookup_node_log(StringRef node_name) const
 {
   const destruct_ptr<NodeLog> *node_log = node_logs_.lookup_ptr_as(node_name);
@@ -122,6 +129,17 @@ const TreeLog *TreeLog::lookup_child_log(StringRef node_name) const
   return tree_log->get();
 }
 
+void TreeLog::foreach_node_log(FunctionRef<void(const NodeLog &)> fn) const
+{
+  for (auto node_log : node_logs_.items()) {
+    fn(*node_log.value);
+  }
+
+  for (auto child : child_logs_.items()) {
+    child.value->foreach_node_log(fn);
+  }
+}
+
 const SocketLog *NodeLog::lookup_socket_log(eNodeSocketInOut in_out, int index) const
 {
   BLI_assert(index >= 0);
@@ -143,8 +161,10 @@ GeometryValueLog::GeometryValueLog(const GeometrySet &geometry_set, bool log_ful
 {
   bke::geometry_set_instances_attribute_foreach(
       geometry_set,
-      [&](StringRefNull attribute_name, const AttributeMetaData &meta_data) {
-        this->attributes_.append({attribute_name, meta_data.domain, meta_data.data_type});
+      [&](const bke::AttributeIDRef &attribute_id, const AttributeMetaData &meta_data) {
+        if (attribute_id.is_named()) {
+          this->attributes_.append({attribute_id.name(), meta_data.domain, meta_data.data_type});
+        }
         return true;
       },
       8);

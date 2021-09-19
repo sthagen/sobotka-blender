@@ -374,10 +374,6 @@ void BKE_object_runtime_free_data(struct Object *object);
 
 void BKE_object_batch_cache_dirty_tag(struct Object *ob);
 void BKE_object_data_batch_cache_dirty_tag(struct ID *object_data);
-void BKE_object_data_eval_batch_cache_dirty_tag(struct Depsgraph *depsgraph,
-                                                struct ID *object_data);
-void BKE_object_data_eval_batch_cache_deform_tag(struct Depsgraph *depsgraph,
-                                                 struct ID *object_data);
 
 /* this function returns a superset of the scenes selection based on relationships */
 
@@ -405,7 +401,10 @@ void BKE_object_groups_clear(struct Main *bmain, struct Scene *scene, struct Obj
 
 struct KDTree_3d *BKE_object_as_kdtree(struct Object *ob, int *r_tot);
 
-bool BKE_object_modifier_use_time(struct Object *ob, struct ModifierData *md);
+bool BKE_object_modifier_use_time(struct Scene *scene,
+                                  struct Object *ob,
+                                  struct ModifierData *md,
+                                  int dag_eval_mode);
 
 bool BKE_object_modifier_update_subframe(struct Depsgraph *depsgraph,
                                          struct Scene *scene,
@@ -459,8 +458,12 @@ void BKE_object_modifiers_lib_link_common(void *userData,
                                           struct ID **idpoin,
                                           int cb_flag);
 
+void BKE_object_replace_data_on_shallow_copy(struct Object *ob, struct ID *new_data);
+
 struct PartEff;
 struct PartEff *BKE_object_do_version_give_parteff_245(struct Object *ob);
+
+bool BKE_object_supports_material_slots(struct Object *ob);
 
 #ifdef __cplusplus
 }

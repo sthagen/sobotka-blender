@@ -59,6 +59,58 @@ typedef struct DrawDataList {
   struct DrawData *first, *last;
 } DrawDataList;
 
+typedef struct IDPropertyUIData {
+  /** Tooltip / property description pointer. Owned by the IDProperty. */
+  char *description;
+  /** RNA subtype, used for every type except string properties (PropertySubType). */
+  int rna_subtype;
+
+  char _pad[4];
+} IDPropertyUIData;
+
+/* IDP_UI_DATA_TYPE_INT */
+typedef struct IDPropertyUIDataInt {
+  IDPropertyUIData base;
+  int *default_array; /* Only for array properties. */
+  int default_array_len;
+  char _pad[4];
+
+  int min;
+  int max;
+  int soft_min;
+  int soft_max;
+  int step;
+  int default_value;
+} IDPropertyUIDataInt;
+
+/* IDP_UI_DATA_TYPE_FLOAT */
+typedef struct IDPropertyUIDataFloat {
+  IDPropertyUIData base;
+  double *default_array; /* Only for array properties. */
+  int default_array_len;
+  char _pad[4];
+
+  float step;
+  int precision;
+
+  double min;
+  double max;
+  double soft_min;
+  double soft_max;
+  double default_value;
+} IDPropertyUIDataFloat;
+
+/* IDP_UI_DATA_TYPE_STRING */
+typedef struct IDPropertyUIDataString {
+  IDPropertyUIData base;
+  char *default_value;
+} IDPropertyUIDataString;
+
+/* IDP_UI_DATA_TYPE_ID */
+typedef struct IDPropertyUIDataID {
+  IDPropertyUIData base;
+} IDPropertyUIDataID;
+
 typedef struct IDPropertyData {
   void *pointer;
   ListBase group;
@@ -87,6 +139,8 @@ typedef struct IDProperty {
   /* totallen is total length of allocated array/string, including a buffer.
    * Note that the buffering is mild; the code comes from python's list implementation. */
   int totallen;
+
+  IDPropertyUIData *ui_data;
 } IDProperty;
 
 #define MAX_IDPROP_NAME 64
@@ -429,7 +483,8 @@ typedef struct PreviewImage {
  * BKE_library_override typically (especially due to the check on LIB_TAG_EXTERN). */
 #define ID_IS_OVERRIDABLE_LIBRARY(_id) \
   (ID_IS_LINKED(_id) && !ID_MISSING(_id) && (((const ID *)(_id))->tag & LIB_TAG_EXTERN) != 0 && \
-   (BKE_idtype_get_info_from_id((const ID *)(_id))->flags & IDTYPE_FLAGS_NO_LIBLINKING) == 0)
+   (BKE_idtype_get_info_from_id((const ID *)(_id))->flags & IDTYPE_FLAGS_NO_LIBLINKING) == 0 && \
+   !ELEM(GS(((ID *)(_id))->name), ID_SCE))
 
 /* NOTE: The three checks below do not take into account whether given ID is linked or not (when
  * chaining overrides over several libraries). User must ensure the ID is not linked itself
@@ -550,7 +605,7 @@ enum {
   /* tag data-block as having actually increased user-count for the extra virtual user. */
   LIB_TAG_EXTRAUSER_SET = 1 << 7,
 
-  /* RESET_AFTER_USE tag newly duplicated/copied IDs.
+  /* RESET_AFTER_USE tag newly duplicated/copied IDs (see #ID_NEW_SET macro above).
    * Also used internally in readfile.c to mark data-blocks needing do_versions. */
   LIB_TAG_NEW = 1 << 8,
   /* RESET_BEFORE_USE free test flag.
@@ -562,13 +617,32 @@ enum {
   /**
    * The data-block is a copy-on-write/localized version.
    *
+   * RESET_NEVER
+   *
    * \warning This should not be cleared on existing data.
    * If support for this is needed, see T88026 as this flag controls memory ownership
    * of physics *shared* pointers.
    */
   LIB_TAG_COPIED_ON_WRITE = 1 << 12,
-
+  /**
+   * The data-block is not the original COW ID created by the depsgraph, but has be re-allocated
+   * during the evaluation process of another ID.
+   *
+   * RESET_NEVER
+   *
+   * Typical example is object data, when evaluating the object's modifier stack the final obdata
+   * can be different than the COW initial obdata ID.
+   */
   LIB_TAG_COPIED_ON_WRITE_EVAL_RESULT = 1 << 13,
+
+  /**
+   * The data-block is fully outside of any ID management area, and should be considered as a
+   * purely independent data.
+   *
+   * RESET_NEVER
+   *
+   * NOTE: Only used by node-groups currently.
+   */
   LIB_TAG_LOCALIZED = 1 << 14,
 
   /* RESET_NEVER tag data-block for freeing etc. behavior
@@ -621,9 +695,9 @@ typedef enum IDRecalcFlag {
    * When a collection gets tagged with this flag, all objects depending on the geometry and
    * transforms on any of the objects in the collection are updated. */
   ID_RECALC_GEOMETRY = (1 << 1),
-  /* Same as #ID_RECALC_GEOMETRY, but instead of tagging the batch cache as `dirty_all`, just tags
-     what matches the deform cache. */
-  ID_RECALC_GEOMETRY_DEFORM = (1 << 2),
+
+  /* ** Animation or time changed and animation is to be re-evaluated. ** */
+  ID_RECALC_ANIMATION = (1 << 2),
 
   /* ** Particle system changed. ** */
   /* Only do pathcache etc. */
@@ -682,9 +756,6 @@ typedef enum IDRecalcFlag {
    * this has the advantage that large arrays stored in the idea data don't
    * have to be copied on every update. */
   ID_RECALC_PARAMETERS = (1 << 21),
-
-  /* ** Animation or time changed and animation is to be re-evaluated. ** */
-  ID_RECALC_ANIMATION = (1 << 22),
 
   /* Input has changed and datablock is to be reload from disk.
    * Applies to movie clips to inform that copy-on-written version is to be refreshed for the new

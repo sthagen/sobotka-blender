@@ -28,6 +28,7 @@
 #include "MEM_guardedalloc.h"
 
 #include "DNA_curve_types.h"
+#include "DNA_gpencil_types.h"
 #include "DNA_lattice_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
@@ -39,6 +40,7 @@
 #include "BLI_alloca.h"
 #include "BLI_array.h"
 #include "BLI_blenlib.h"
+#include "BLI_listbase.h"
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
 #include "BLI_utildefines_stack.h"
@@ -1582,7 +1584,7 @@ static void vgroup_fix(
           mag = normalize_v3(norm);
           if (mag) { /* zeros fix */
             d = -dot_v3v3(norm, coord);
-            /* dist = (dot_v3v3(norm, m.co) + d); */ /* UNUSED */
+            // dist = (dot_v3v3(norm, m.co) + d); /* UNUSED */
             moveCloserToDistanceFromPlane(
                 depsgraph, scene_eval, object_eval, me, i, norm, coord, d, distToBe, strength, cp);
           }
@@ -3892,7 +3894,7 @@ static int vertex_group_copy_to_selected_exec(bContext *C, wmOperator *op)
   int fail = 0;
 
   CTX_DATA_BEGIN (C, Object *, ob, selected_editable_objects) {
-    if (obact != ob) {
+    if (obact != ob && BKE_object_supports_vertex_groups(ob)) {
       if (ED_vgroup_array_copy(ob, obact)) {
         DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
         DEG_relations_tag_update(CTX_data_main(C));
@@ -3909,8 +3911,8 @@ static int vertex_group_copy_to_selected_exec(bContext *C, wmOperator *op)
   if ((changed_tot == 0 && fail == 0) || fail) {
     BKE_reportf(op->reports,
                 RPT_ERROR,
-                "Copy vertex groups to selected: %d done, %d failed (object data must have "
-                "matching indices)",
+                "Copy vertex groups to selected: %d done, %d failed (object data must support "
+                "vertex groups and have matching indices)",
                 changed_tot,
                 fail);
   }
@@ -4083,16 +4085,38 @@ static int vgroup_do_remap(Object *ob, const char *name_array, wmOperator *op)
   }
   else {
     int dvert_tot = 0;
-
-    BKE_object_defgroup_array_get(ob->data, &dvert, &dvert_tot);
-
-    /* Create as necessary. */
-    if (dvert) {
-      while (dvert_tot--) {
-        if (dvert->totweight) {
-          BKE_defvert_remap(dvert, sort_map, defbase_tot);
+    /* Grease pencil stores vertex groups separately for each stroke,
+     * so remap each stroke's weights separately. */
+    if (ob->type == OB_GPENCIL) {
+      bGPdata *gpd = ob->data;
+      LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) {
+        LISTBASE_FOREACH (bGPDframe *, gpf, &gpl->frames) {
+          LISTBASE_FOREACH (bGPDstroke *, gps, &gpf->strokes) {
+            dvert = gps->dvert;
+            dvert_tot = gps->totpoints;
+            if (dvert) {
+              while (dvert_tot--) {
+                if (dvert->totweight) {
+                  BKE_defvert_remap(dvert, sort_map, defbase_tot);
+                }
+                dvert++;
+              }
+            }
+          }
         }
-        dvert++;
+      }
+    }
+    else {
+      BKE_object_defgroup_array_get(ob->data, &dvert, &dvert_tot);
+
+      /* Create as necessary. */
+      if (dvert) {
+        while (dvert_tot--) {
+          if (dvert->totweight) {
+            BKE_defvert_remap(dvert, sort_map, defbase_tot);
+          }
+          dvert++;
+        }
       }
     }
   }

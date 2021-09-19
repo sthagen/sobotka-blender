@@ -616,6 +616,7 @@ const EnumPropertyItem rna_enum_transform_orientation_items[] = {
 #  include "BLI_string_utils.h"
 
 #  include "DNA_anim_types.h"
+#  include "DNA_cachefile_types.h"
 #  include "DNA_color_types.h"
 #  include "DNA_mesh_types.h"
 #  include "DNA_node_types.h"
@@ -1615,6 +1616,11 @@ static int rna_RenderSettings_engine_get(PointerRNA *ptr)
 static void rna_RenderSettings_engine_update(Main *bmain,
                                              Scene *UNUSED(unused),
                                              PointerRNA *UNUSED(ptr))
+{
+  ED_render_engine_changed(bmain, true);
+}
+
+static void rna_Scene_update_render_engine(Main *bmain)
 {
   ED_render_engine_changed(bmain, true);
 }
@@ -2834,7 +2840,18 @@ static void rna_def_tool_settings(BlenderRNA *brna)
       {0, NULL, 0, NULL, NULL},
   };
 
-  static const EnumPropertyItem annotation_stroke_placement_items[] = {
+  static const EnumPropertyItem annotation_stroke_placement_view2d_items[] = {
+      {GP_PROJECT_VIEWSPACE | GP_PROJECT_CURSOR,
+       "IMAGE",
+       ICON_IMAGE_DATA,
+       "Image",
+       "Stick stroke to the image"},
+      /* Weird, GP_PROJECT_VIEWALIGN is inverted. */
+      {0, "VIEW", ICON_RESTRICT_VIEW_ON, "View", "Stick stroke to the view"},
+      {0, NULL, 0, NULL, NULL},
+  };
+
+  static const EnumPropertyItem annotation_stroke_placement_view3d_items[] = {
       {GP_PROJECT_VIEWSPACE | GP_PROJECT_CURSOR,
        "CURSOR",
        ICON_PIVOT_CURSOR,
@@ -3338,30 +3355,15 @@ static void rna_def_tool_settings(BlenderRNA *brna)
   /* Annotations - 2D Views Stroke Placement */
   prop = RNA_def_property(srna, "annotation_stroke_placement_view2d", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_bitflag_sdna(prop, NULL, "gpencil_v2d_align");
-  RNA_def_property_enum_items(prop, annotation_stroke_placement_items);
+  RNA_def_property_enum_items(prop, annotation_stroke_placement_view2d_items);
   RNA_def_property_ui_text(prop, "Stroke Placement (2D View)", "");
-  RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, NULL);
-
-  /* Annotations - Sequencer Preview Stroke Placement */
-  prop = RNA_def_property(
-      srna, "annotation_stroke_placement_sequencer_preview", PROP_ENUM, PROP_NONE);
-  RNA_def_property_enum_bitflag_sdna(prop, NULL, "gpencil_seq_align");
-  RNA_def_property_enum_items(prop, annotation_stroke_placement_items);
-  RNA_def_property_ui_text(prop, "Stroke Placement (Sequencer Preview)", "");
-  RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, NULL);
-
-  /* Annotations - Image Editor Stroke Placement */
-  prop = RNA_def_property(srna, "annotation_stroke_placement_image_editor", PROP_ENUM, PROP_NONE);
-  RNA_def_property_enum_bitflag_sdna(prop, NULL, "gpencil_ima_align");
-  RNA_def_property_enum_items(prop, annotation_stroke_placement_items);
-  RNA_def_property_ui_text(prop, "Stroke Placement (Image Editor)", "");
   RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, NULL);
 
   /* Annotations - 3D View Stroke Placement */
   /* XXX: Do we need to decouple the stroke_endpoints setting too? */
   prop = RNA_def_property(srna, "annotation_stroke_placement_view3d", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_bitflag_sdna(prop, NULL, "annotate_v3d_align");
-  RNA_def_property_enum_items(prop, annotation_stroke_placement_items);
+  RNA_def_property_enum_items(prop, annotation_stroke_placement_view3d_items);
   RNA_def_property_enum_default(prop, GP_PROJECT_VIEWSPACE | GP_PROJECT_CURSOR);
   RNA_def_property_ui_text(prop,
                            "Annotation Stroke Placement (3D View)",
@@ -3508,6 +3510,21 @@ static void rna_def_sequencer_tool_settings(BlenderRNA *brna)
       {0, NULL, 0, NULL, NULL},
   };
 
+  static const EnumPropertyItem scale_overlap_modes[] = {
+      {SEQ_OVERLAP_EXPAND, "EXPAND", 0, "Expand", "Move strips so transformed strips fits"},
+      {SEQ_OVERLAP_OVERWRITE,
+       "OVERWRITE",
+       0,
+       "Overwrite",
+       "Trim or split strips to resolve overlap"},
+      {SEQ_OVERLAP_SHUFFLE,
+       "SHUFFLE",
+       0,
+       "Shuffle",
+       "Move transformed strips to nearest free space to resolve overlap"},
+      {0, NULL, 0, NULL, NULL},
+  };
+
   srna = RNA_def_struct(brna, "SequencerToolSettings", NULL);
   RNA_def_struct_path_func(srna, "rna_SequencerToolSettings_path");
   RNA_def_struct_ui_text(srna, "Sequencer Tool Settings", "");
@@ -3546,6 +3563,11 @@ static void rna_def_sequencer_tool_settings(BlenderRNA *brna)
   RNA_def_property_int_default(prop, 15);
   RNA_def_property_ui_range(prop, 0, 50, 1, 1);
   RNA_def_property_ui_text(prop, "Snapping Distance", "Maximum distance for snapping in pixels");
+
+  /* Transform overlap handling. */
+  prop = RNA_def_property(srna, "overlap_mode", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, scale_overlap_modes);
+  RNA_def_property_ui_text(prop, "Overlap Mode", "How to resolve overlap after transformation");
 }
 
 static void rna_def_unified_paint_settings(BlenderRNA *brna)
@@ -4124,41 +4146,6 @@ void rna_def_view_layer_common(BlenderRNA *brna, StructRNA *srna, const bool sce
     RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, "rna_ViewLayer_pass_update");
   }
 
-  /* layer options */
-  prop = RNA_def_property(srna, "use_zmask", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, NULL, "layflag", SCE_LAY_ZMASK);
-  RNA_def_property_ui_text(prop, "Zmask", "Only render what's in front of the solid z values");
-  if (scene) {
-    RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, "rna_Scene_glsl_update");
-  }
-  else {
-    RNA_def_property_clear_flag(prop, PROP_EDITABLE);
-  }
-
-  prop = RNA_def_property(srna, "invert_zmask", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, NULL, "layflag", SCE_LAY_NEG_ZMASK);
-  RNA_def_property_ui_text(
-      prop,
-      "Zmask Negate",
-      "For Zmask, only render what is behind solid z values instead of in front");
-  if (scene) {
-    RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, "rna_Scene_glsl_update");
-  }
-  else {
-    RNA_def_property_clear_flag(prop, PROP_EDITABLE);
-  }
-
-  prop = RNA_def_property(srna, "use_all_z", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, NULL, "layflag", SCE_LAY_ALL_Z);
-  RNA_def_property_ui_text(
-      prop, "All Z", "Fill in Z values for solid faces in invisible layers, for masking");
-  if (scene) {
-    RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
-  }
-  else {
-    RNA_def_property_clear_flag(prop, PROP_EDITABLE);
-  }
-
   prop = RNA_def_property(srna, "use_solid", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "layflag", SCE_LAY_SOLID);
   RNA_def_property_ui_text(prop, "Solid", "Render Solid faces in this Layer");
@@ -4168,29 +4155,6 @@ void rna_def_view_layer_common(BlenderRNA *brna, StructRNA *srna, const bool sce
   else {
     RNA_def_property_clear_flag(prop, PROP_EDITABLE);
   }
-
-  prop = RNA_def_property(srna, "use_halo", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, NULL, "layflag", SCE_LAY_HALO);
-  RNA_def_property_ui_text(prop, "Halo", "Render Halos in this Layer (on top of Solid)");
-  if (scene) {
-    RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
-  }
-  else {
-    RNA_def_property_clear_flag(prop, PROP_EDITABLE);
-  }
-
-  prop = RNA_def_property(srna, "use_ztransp", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, NULL, "layflag", SCE_LAY_ZTRA);
-  RNA_def_property_ui_text(prop,
-                           "Z-Transparent",
-                           "Render Z-transparent faces in this layer (on top of Solid and Halos)");
-  if (scene) {
-    RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
-  }
-  else {
-    RNA_def_property_clear_flag(prop, PROP_EDITABLE);
-  }
-
   prop = RNA_def_property(srna, "use_sky", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "layflag", SCE_LAY_SKY);
   RNA_def_property_ui_text(prop, "Sky", "Render Sky in this Layer");
@@ -4206,17 +4170,6 @@ void rna_def_view_layer_common(BlenderRNA *brna, StructRNA *srna, const bool sce
   RNA_def_property_ui_text(prop, "Ambient Occlusion", "Render Ambient Occlusion in this Layer");
   if (scene) {
     RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, "rna_Scene_glsl_update");
-  }
-  else {
-    RNA_def_property_clear_flag(prop, PROP_EDITABLE);
-  }
-
-  prop = RNA_def_property(srna, "use_edge_enhance", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, NULL, "layflag", SCE_LAY_EDGE);
-  RNA_def_property_ui_text(
-      prop, "Edge", "Render edge-enhance in this layer (only works for solid faces)");
-  if (scene) {
-    RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
   }
   else {
     RNA_def_property_clear_flag(prop, PROP_EDITABLE);
@@ -4644,12 +4597,12 @@ void rna_def_freestyle_settings(BlenderRNA *brna)
       {FREESTYLE_CONTROL_SCRIPT_MODE,
        "SCRIPT",
        0,
-       "Python Scripting Mode",
+       "Python Scripting",
        "Advanced mode for using style modules written in Python"},
       {FREESTYLE_CONTROL_EDITOR_MODE,
        "EDITOR",
        0,
-       "Parameter Editor Mode",
+       "Parameter Editor",
        "Basic mode for interactive style parameter editing"},
       {0, NULL, 0, NULL, NULL},
   };
@@ -4660,7 +4613,7 @@ void rna_def_freestyle_settings(BlenderRNA *brna)
       {FREESTYLE_QI_RANGE,
        "RANGE",
        0,
-       "QI Range",
+       "Quantitative Invisibility",
        "Select feature edges within a range of quantitative invisibility (QI) values"},
       {0, NULL, 0, NULL, NULL},
   };
@@ -4977,14 +4930,6 @@ void rna_def_freestyle_settings(BlenderRNA *brna)
       prop, "Face Smoothness", "Take face smoothness into account in view map calculation");
   RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, "rna_Scene_freestyle_update");
 
-  prop = RNA_def_property(srna, "use_advanced_options", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, NULL, "flags", FREESTYLE_ADVANCED_OPTIONS_FLAG);
-  RNA_def_property_ui_text(
-      prop,
-      "Advanced Options",
-      "Enable advanced edge detection options (sphere radius and Kr derivative epsilon)");
-  RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, "rna_Scene_freestyle_update");
-
   prop = RNA_def_property(srna, "use_view_map_cache", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "flags", FREESTYLE_VIEW_MAP_CACHE);
   RNA_def_property_ui_text(
@@ -5004,11 +4949,13 @@ void rna_def_freestyle_settings(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "sphere_radius", PROP_FLOAT, PROP_NONE);
   RNA_def_property_float_sdna(prop, NULL, "sphere_radius");
+  RNA_def_property_float_default(prop, 1.0);
   RNA_def_property_range(prop, 0.0, 1000.0);
   RNA_def_property_ui_text(prop, "Sphere Radius", "Sphere radius for computing curvatures");
   RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, "rna_Scene_freestyle_update");
 
   prop = RNA_def_property(srna, "kr_derivative_epsilon", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_float_default(prop, 0.0);
   RNA_def_property_float_sdna(prop, NULL, "dkr_epsilon");
   RNA_def_property_range(prop, -1000.0, 1000.0);
   RNA_def_property_ui_text(
@@ -7737,6 +7684,7 @@ void RNA_def_scene(BlenderRNA *brna)
   prop = RNA_def_property(srna, "node_tree", PROP_POINTER, PROP_NONE);
   RNA_def_property_pointer_sdna(prop, NULL, "nodetree");
   RNA_def_property_clear_flag(prop, PROP_PTR_NO_OWNERSHIP);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_ui_text(prop, "Node Tree", "Compositing node tree");
 
   prop = RNA_def_property(srna, "use_nodes", PROP_BOOLEAN, PROP_NONE);
@@ -7908,6 +7856,10 @@ void RNA_def_scene(BlenderRNA *brna)
   RNA_def_property_update(prop, NC_SCENE, NULL);
   RNA_def_property_update(prop, NC_SCENE, "rna_Scene_volume_update");
 
+  func = RNA_def_function(srna, "update_render_engine", "rna_Scene_update_render_engine");
+  RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_USE_MAIN);
+  RNA_def_function_ui_description(func, "Trigger a render engine update");
+
   /* Statistics */
   func = RNA_def_function(srna, "statistics", "rna_Scene_statistics_string_get");
   RNA_def_function_flag(func, FUNC_USE_MAIN | FUNC_USE_REPORTS);
@@ -7968,6 +7920,7 @@ void RNA_def_scene(BlenderRNA *brna)
   RNA_def_property_pointer_sdna(prop, NULL, "master_collection");
   RNA_def_property_struct_type(prop, "Collection");
   RNA_def_property_clear_flag(prop, PROP_PTR_NO_OWNERSHIP);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_ui_text(prop,
                            "Collection",
                            "Scene root collection that owns all the objects and other collections "

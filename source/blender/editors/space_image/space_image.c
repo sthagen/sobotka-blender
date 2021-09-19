@@ -253,10 +253,7 @@ static void image_keymap(struct wmKeyConfig *keyconf)
 }
 
 /* dropboxes */
-static bool image_drop_poll(bContext *C,
-                            wmDrag *drag,
-                            const wmEvent *event,
-                            const char **UNUSED(r_tooltip))
+static bool image_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
 {
   ScrArea *area = CTX_wm_area(C);
   if (ED_region_overlap_isect_any_xy(area, &event->x)) {
@@ -282,7 +279,7 @@ static void image_dropboxes(void)
 {
   ListBase *lb = WM_dropboxmap_find("Image", SPACE_IMAGE, 0);
 
-  WM_dropbox_add(lb, "IMAGE_OT_open", image_drop_poll, image_drop_copy, NULL);
+  WM_dropbox_add(lb, "IMAGE_OT_open", image_drop_poll, image_drop_copy, NULL, NULL);
 }
 
 /**
@@ -464,7 +461,7 @@ static void IMAGE_GGT_gizmo2d(wmGizmoGroupType *gzgt)
   gzgt->name = "UV Transform Gizmo";
   gzgt->idname = "IMAGE_GGT_gizmo2d";
 
-  gzgt->flag |= (WM_GIZMOGROUPTYPE_TOOL_FALLBACK_KEYMAP |
+  gzgt->flag |= (WM_GIZMOGROUPTYPE_DRAW_MODAL_EXCLUDE | WM_GIZMOGROUPTYPE_TOOL_FALLBACK_KEYMAP |
                  WM_GIZMOGROUPTYPE_DELAY_REFRESH_FOR_TWEAK);
 
   gzgt->gzmap_params.spaceid = SPACE_IMAGE;
@@ -478,7 +475,7 @@ static void IMAGE_GGT_gizmo2d_translate(wmGizmoGroupType *gzgt)
   gzgt->name = "UV Translate Gizmo";
   gzgt->idname = "IMAGE_GGT_gizmo2d_translate";
 
-  gzgt->flag |= (WM_GIZMOGROUPTYPE_TOOL_FALLBACK_KEYMAP |
+  gzgt->flag |= (WM_GIZMOGROUPTYPE_DRAW_MODAL_EXCLUDE | WM_GIZMOGROUPTYPE_TOOL_FALLBACK_KEYMAP |
                  WM_GIZMOGROUPTYPE_DELAY_REFRESH_FOR_TWEAK);
 
   gzgt->gzmap_params.spaceid = SPACE_IMAGE;
@@ -492,7 +489,7 @@ static void IMAGE_GGT_gizmo2d_resize(wmGizmoGroupType *gzgt)
   gzgt->name = "UV Transform Gizmo Resize";
   gzgt->idname = "IMAGE_GGT_gizmo2d_resize";
 
-  gzgt->flag |= (WM_GIZMOGROUPTYPE_TOOL_FALLBACK_KEYMAP |
+  gzgt->flag |= (WM_GIZMOGROUPTYPE_DRAW_MODAL_EXCLUDE | WM_GIZMOGROUPTYPE_TOOL_FALLBACK_KEYMAP |
                  WM_GIZMOGROUPTYPE_DELAY_REFRESH_FOR_TWEAK);
 
   gzgt->gzmap_params.spaceid = SPACE_IMAGE;
@@ -506,7 +503,7 @@ static void IMAGE_GGT_gizmo2d_rotate(wmGizmoGroupType *gzgt)
   gzgt->name = "UV Transform Gizmo Resize";
   gzgt->idname = "IMAGE_GGT_gizmo2d_rotate";
 
-  gzgt->flag |= (WM_GIZMOGROUPTYPE_TOOL_FALLBACK_KEYMAP |
+  gzgt->flag |= (WM_GIZMOGROUPTYPE_DRAW_MODAL_EXCLUDE | WM_GIZMOGROUPTYPE_TOOL_FALLBACK_KEYMAP |
                  WM_GIZMOGROUPTYPE_DELAY_REFRESH_FOR_TWEAK);
 
   gzgt->gzmap_params.spaceid = SPACE_IMAGE;

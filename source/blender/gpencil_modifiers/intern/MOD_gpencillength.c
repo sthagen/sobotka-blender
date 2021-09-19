@@ -1,6 +1,4 @@
 /*
- * ***** BEGIN GPL LICENSE BLOCK *****
- *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
@@ -12,14 +10,11 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software  Foundation,
+ * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  *
  * The Original Code is Copyright (C) 2017, Blender Foundation
  * This is a new part of Blender
- *
- * ***** END GPL LICENSE BLOCK *****
- *
  */
 
 /** \file
@@ -113,27 +108,6 @@ static void applyLength(LengthGpencilModifierData *lmd, bGPdata *gpd, bGPDstroke
   }
 }
 
-static void bakeModifier(Main *UNUSED(bmain),
-                         Depsgraph *UNUSED(depsgraph),
-                         GpencilModifierData *md,
-                         Object *ob)
-{
-
-  bGPdata *gpd = ob->data;
-
-  LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) {
-    LISTBASE_FOREACH (bGPDframe *, gpf, &gpl->frames) {
-      LengthGpencilModifierData *lmd = (LengthGpencilModifierData *)md;
-      LISTBASE_FOREACH (bGPDstroke *, gps, &gpf->strokes) {
-        applyLength(lmd, gpd, gps);
-      }
-    }
-  }
-}
-
-/* -------------------------------- */
-
-/* Generic "generateStrokes" callback */
 static void deformStroke(GpencilModifierData *md,
                          Depsgraph *UNUSED(depsgraph),
                          Object *ob,
@@ -156,6 +130,23 @@ static void deformStroke(GpencilModifierData *md,
                                      lmd->flag & GP_LENGTH_INVERT_LAYERPASS,
                                      lmd->flag & GP_LENGTH_INVERT_MATERIAL)) {
     applyLength(lmd, gpd, gps);
+  }
+}
+
+static void bakeModifier(Main *UNUSED(bmain),
+                         Depsgraph *depsgraph,
+                         GpencilModifierData *md,
+                         Object *ob)
+{
+
+  bGPdata *gpd = ob->data;
+
+  LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) {
+    LISTBASE_FOREACH (bGPDframe *, gpf, &gpl->frames) {
+      LISTBASE_FOREACH (bGPDstroke *, gps, &gpf->strokes) {
+        deformStroke(md, depsgraph, ob, gpl, gpf, gps);
+      }
+    }
   }
 }
 

@@ -56,6 +56,7 @@ typedef enum GpencilModifierType {
   eGpencilModifierType_Lineart = 19,
   eGpencilModifierType_Length = 20,
   eGpencilModifierType_Weight = 21,
+  eGpencilModifierType_Dash = 22,
   /* Keep last. */
   NUM_GREASEPENCIL_MODIFIER_TYPES,
 } GpencilModifierType;
@@ -507,6 +508,39 @@ typedef enum eLengthGpencil_Type {
   GP_LENGTH_ABSOLUTE = 1,
 } eLengthGpencil_Type;
 
+typedef struct DashGpencilModifierSegment {
+  char name[64];
+  /* For path reference. */
+  struct DashGpencilModifierData *dmd;
+  int dash;
+  int gap;
+  float radius;
+  float opacity;
+  int mat_nr;
+  int _pad;
+} DashGpencilModifierSegment;
+
+typedef struct DashGpencilModifierData {
+  GpencilModifierData modifier;
+  /** Material for filtering. */
+  struct Material *material;
+  /** Layer name. */
+  char layername[64];
+  /** Custom index for passes. */
+  int pass_index;
+  /** Flags. */
+  int flag;
+  /** Custom index for passes. */
+  int layer_pass;
+
+  int dash_offset;
+
+  DashGpencilModifierSegment *segments;
+  int segments_len;
+  int segment_active_index;
+
+} DashGpencilModifierData;
+
 typedef struct MirrorGpencilModifierData {
   GpencilModifierData modifier;
   struct Object *object;
@@ -942,9 +976,11 @@ struct LineartCache;
 typedef struct LineartGpencilModifierData {
   GpencilModifierData modifier;
 
-  short edge_types; /* line type enable flags, bits in eLineartEdgeFlag */
+  /** Line type enable flags, bits in #eLineartEdgeFlag. */
+  short edge_types;
 
-  char source_type; /* Object or Collection, from eLineartGpencilModifierSource */
+  /** Object or Collection, from #eLineartGpencilModifierSource. */
+  char source_type;
 
   char use_multiple_levels;
   short level_start;
@@ -963,14 +999,22 @@ typedef struct LineartGpencilModifierData {
   char source_vertex_group[64];
   char vgname[64];
 
+  /**
+   * Camera focal length is divided by `1 + overscan`, before calculation, which give a wider FOV,
+   * this doesn't change coordinates range internally (-1, 1), but makes the calculated frame
+   * bigger than actual output. This is for the easier shifting calculation. A value of 0.5 means
+   * the "internal" focal length become 2/3 of the actual camera.
+   */
+  float overscan;
+
   float opacity;
   short thickness;
 
-  unsigned char mask_switches; /* eLineartGpencilMaskSwitches */
+  unsigned char mask_switches; /* #eLineartGpencilMaskSwitches */
   unsigned char material_mask_bits;
   unsigned char intersection_mask;
 
-  char _pad[7];
+  char _pad[3];
 
   /** `0..1` range for cosine angle */
   float crease_threshold;
@@ -984,7 +1028,7 @@ typedef struct LineartGpencilModifierData {
   /* Ported from SceneLineArt flags. */
   int calculation_flags;
 
-  /* eLineArtGPencilModifierFlags, modifier internal state. */
+  /* #eLineArtGPencilModifierFlags, modifier internal state. */
   int flags;
 
   /* Runtime data. */

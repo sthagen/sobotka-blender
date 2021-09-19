@@ -25,6 +25,7 @@
 
 #include "DNA_curve_types.h"
 
+#include "BKE_anonymous_attribute.hh"
 #include "BKE_curve.h"
 #include "BKE_spline.hh"
 
@@ -37,6 +38,7 @@ using blender::MutableSpan;
 using blender::Span;
 using blender::StringRefNull;
 using blender::Vector;
+using blender::bke::AttributeIDRef;
 
 blender::Span<SplinePtr> CurveEval::splines() const
 {
@@ -46,6 +48,22 @@ blender::Span<SplinePtr> CurveEval::splines() const
 blender::MutableSpan<SplinePtr> CurveEval::splines()
 {
   return splines_;
+}
+
+/**
+ * \return True if the curve contains a spline with the given type.
+ *
+ * \note If you are looping over all of the splines in the same scope anyway,
+ * it's better to avoid calling this function, in case there are many splines.
+ */
+bool CurveEval::has_spline_with_type(const Spline::Type type) const
+{
+  for (const SplinePtr &spline : this->splines()) {
+    if (spline->type() == type) {
+      return true;
+    }
+  }
+  return false;
 }
 
 void CurveEval::resize(const int size)
@@ -314,13 +332,13 @@ void CurveEval::assert_valid_point_attributes() const
     return;
   }
   const int layer_len = splines_.first()->attributes.data.totlayer;
-  Map<StringRefNull, AttributeMetaData> map;
+  Map<AttributeIDRef, AttributeMetaData> map;
   for (const SplinePtr &spline : splines_) {
     BLI_assert(spline->attributes.data.totlayer == layer_len);
     spline->attributes.foreach_attribute(
-        [&](StringRefNull name, const AttributeMetaData &meta_data) {
+        [&](const AttributeIDRef &attribute_id, const AttributeMetaData &meta_data) {
           map.add_or_modify(
-              name,
+              attribute_id,
               [&](AttributeMetaData *map_data) {
                 /* All unique attribute names should be added on the first spline. */
                 BLI_assert(spline == splines_.first());

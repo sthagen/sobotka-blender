@@ -216,6 +216,16 @@ typedef enum eNodeSocketFlag {
   SOCK_HIDE_LABEL = (1 << 12),
 } eNodeSocketFlag;
 
+/** Workaround to forward-declare C++ type in C header. */
+#ifdef __cplusplus
+namespace blender::nodes {
+class NodeDeclaration;
+}
+using NodeDeclarationHandle = blender::nodes::NodeDeclaration;
+#else
+typedef struct NodeDeclarationHandle NodeDeclarationHandle;
+#endif
+
 /* TODO: Limit data in bNode to what we want to see saved. */
 typedef struct bNode {
   struct bNode *next, *prev, *new_node;
@@ -315,6 +325,26 @@ typedef struct bNode {
    * needs to be a float to feed GPU_uniform.
    */
   float sss_id;
+
+  /**
+   * Describes the desired interface of the node. This is run-time data only.
+   * The actual interface of the node may deviate from the declaration temporarily.
+   * It's possible to sync the actual state of the node to the desired state. Currently, this is
+   * only done when a node is created or loaded.
+   *
+   * In the future, we may want to keep more data only in the declaration, so that it does not have
+   * to be synced to other places that are stored in files. That especially applies to data that
+   * can't be edited by users directly (e.g. min/max values of sockets, tooltips, ...).
+   *
+   * The declaration of a node can be recreated at any time when it is used. Caching it here is
+   * just a bit more efficient when it is used a lot. To make sure that the cache is up-to-date,
+   * call #nodeDeclarationEnsure before using it.
+   *
+   * Currently, the declaration is the same for every node of the same type. Going forward, that is
+   * intended to change though. Especially when nodes become more dynamic with respect to how many
+   * sockets they have.
+   */
+  NodeDeclarationHandle *declaration;
 } bNode;
 
 /* node->flag */
@@ -1328,6 +1358,13 @@ typedef struct NodeAttributeConvert {
   int8_t domain;
 } NodeAttributeConvert;
 
+typedef struct NodeGeometrySubdivisionSurface {
+  /* eSubsurfUVSmooth. */
+  uint8_t uv_smooth;
+  /* eSubsurfBoundarySmooth. */
+  uint8_t boundary_smooth;
+} NodeGeometrySubdivisionSurface;
+
 typedef struct NodeGeometryMeshCircle {
   /* GeometryNodeMeshCircleFillType. */
   uint8_t fill_type;
@@ -1355,6 +1392,25 @@ typedef struct NodeSwitch {
   uint8_t input_type;
 } NodeSwitch;
 
+typedef struct NodeGeometryCurveSplineType {
+  /* GeometryNodeSplineType. */
+  uint8_t spline_type;
+} NodeGeometryCurveSplineType;
+
+typedef struct NodeGeometryCurveSetHandles {
+  /* GeometryNodeCurveHandleType. */
+  uint8_t handle_type;
+  /* GeometryNodeCurveHandleMode. */
+  uint8_t mode;
+} NodeGeometryCurveSetHandles;
+
+typedef struct NodeGeometryCurveSelectHandles {
+  /* GeometryNodeCurveHandleType. */
+  uint8_t handle_type;
+  /* GeometryNodeCurveHandleMode. */
+  uint8_t mode;
+} NodeGeometryCurveSelectHandles;
+
 typedef struct NodeGeometryCurvePrimitiveLine {
   /* GeometryNodeCurvePrimitiveLineMode. */
   uint8_t mode;
@@ -1376,7 +1432,7 @@ typedef struct NodeGeometryCurvePrimitiveQuad {
 } NodeGeometryCurvePrimitiveQuad;
 
 typedef struct NodeGeometryCurveResample {
-  /* GeometryNodeCurveSampleMode. */
+  /* GeometryNodeCurveResampleMode. */
   uint8_t mode;
 } NodeGeometryCurveResample;
 
@@ -1385,8 +1441,13 @@ typedef struct NodeGeometryCurveSubdivide {
   uint8_t cuts_type;
 } NodeGeometryCurveSubdivide;
 
-typedef struct NodeGeometryCurveToPoints {
+typedef struct NodeGeometryCurveTrim {
   /* GeometryNodeCurveSampleMode. */
+  uint8_t mode;
+} NodeGeometryCurveTrim;
+
+typedef struct NodeGeometryCurveToPoints {
+  /* GeometryNodeCurveResampleMode. */
   uint8_t mode;
 } NodeGeometryCurveToPoints;
 
@@ -1405,6 +1466,17 @@ typedef struct NodeGeometryRaycast {
   uint8_t input_type_ray_length;
   char _pad[1];
 } NodeGeometryRaycast;
+
+typedef struct NodeGeometryCurveFill {
+  uint8_t mode;
+} NodeGeometryCurveFill;
+
+typedef struct NodeGeometryAttributeCapture {
+  /* CustomDataType. */
+  int8_t data_type;
+  /* AttributeDomain. */
+  int8_t domain;
+} NodeGeometryAttributeCapture;
 
 /* script node mode */
 #define NODE_SCRIPT_INTERNAL 0
@@ -1805,9 +1877,9 @@ typedef enum NodeShaderOutputTarget {
 /* Geometry Nodes */
 
 typedef enum GeometryNodeAttributeProximityTargetType {
-  GEO_NODE_ATTRIBUTE_PROXIMITY_TARGET_GEOMETRY_ELEMENT_POINTS = 0,
-  GEO_NODE_ATTRIBUTE_PROXIMITY_TARGET_GEOMETRY_ELEMENT_EDGES = 1,
-  GEO_NODE_ATTRIBUTE_PROXIMITY_TARGET_GEOMETRY_ELEMENT_FACES = 2,
+  GEO_NODE_PROXIMITY_TARGET_POINTS = 0,
+  GEO_NODE_PROXIMITY_TARGET_EDGES = 1,
+  GEO_NODE_PROXIMITY_TARGET_FACES = 2,
 } GeometryNodeAttributeProximityTargetType;
 
 typedef enum GeometryNodeBooleanOperation {
@@ -1816,10 +1888,28 @@ typedef enum GeometryNodeBooleanOperation {
   GEO_NODE_BOOLEAN_DIFFERENCE = 2,
 } GeometryNodeBooleanOperation;
 
+typedef enum GeometryNodeSplineType {
+  GEO_NODE_SPLINE_TYPE_BEZIER = 0,
+  GEO_NODE_SPLINE_TYPE_NURBS = 1,
+  GEO_NODE_SPLINE_TYPE_POLY = 2,
+} GeometryNodeSplineType;
+
 typedef enum GeometryNodeCurvePrimitiveCircleMode {
   GEO_NODE_CURVE_PRIMITIVE_CIRCLE_TYPE_POINTS = 0,
   GEO_NODE_CURVE_PRIMITIVE_CIRCLE_TYPE_RADIUS = 1
 } GeometryNodeCurvePrimitiveCircleMode;
+
+typedef enum GeometryNodeCurveHandleType {
+  GEO_NODE_CURVE_HANDLE_FREE = 0,
+  GEO_NODE_CURVE_HANDLE_AUTO = 1,
+  GEO_NODE_CURVE_HANDLE_VECTOR = 2,
+  GEO_NODE_CURVE_HANDLE_ALIGN = 3
+} GeometryNodeCurveHandleType;
+
+typedef enum GeometryNodeCurveHandleMode {
+  GEO_NODE_CURVE_HANDLE_LEFT = (1 << 0),
+  GEO_NODE_CURVE_HANDLE_RIGHT = (1 << 1)
+} GeometryNodeCurveHandleMode;
 
 typedef enum GeometryNodeTriangulateNGons {
   GEO_NODE_TRIANGULATE_NGON_BEAUTY = 0,
@@ -1836,6 +1926,7 @@ typedef enum GeometryNodeTriangulateQuads {
 typedef enum GeometryNodePointInstanceType {
   GEO_NODE_POINT_INSTANCE_TYPE_OBJECT = 0,
   GEO_NODE_POINT_INSTANCE_TYPE_COLLECTION = 1,
+  GEO_NODE_POINT_INSTANCE_TYPE_GEOMETRY = 2,
 } GeometryNodePointInstanceType;
 
 typedef enum GeometryNodePointInstanceFlag {
@@ -1938,10 +2029,15 @@ typedef enum GeometryNodeCurvePrimitiveBezierSegmentMode {
   GEO_NODE_CURVE_PRIMITIVE_BEZIER_SEGMENT_OFFSET = 1,
 } GeometryNodeCurvePrimitiveBezierSegmentMode;
 
-typedef enum GeometryNodeCurveSampleMode {
+typedef enum GeometryNodeCurveResampleMode {
   GEO_NODE_CURVE_SAMPLE_COUNT = 0,
   GEO_NODE_CURVE_SAMPLE_LENGTH = 1,
   GEO_NODE_CURVE_SAMPLE_EVALUATED = 2,
+} GeometryNodeCurveResampleMode;
+
+typedef enum GeometryNodeCurveSampleMode {
+  GEO_NODE_CURVE_INTERPOLATE_FACTOR = 0,
+  GEO_NODE_CURVE_INTERPOLATE_LENGTH = 1,
 } GeometryNodeCurveSampleMode;
 
 typedef enum GeometryNodeAttributeTransferMapMode {
@@ -1953,6 +2049,11 @@ typedef enum GeometryNodeRaycastMapMode {
   GEO_NODE_RAYCAST_INTERPOLATED = 0,
   GEO_NODE_RAYCAST_NEAREST = 1,
 } GeometryNodeRaycastMapMode;
+
+typedef enum GeometryNodeCurveFillMode {
+  GEO_NODE_CURVE_FILL_MODE_TRIANGULATED = 0,
+  GEO_NODE_CURVE_FILL_MODE_NGONS = 1,
+} GeometryNodeCurveFillMode;
 
 #ifdef __cplusplus
 }
