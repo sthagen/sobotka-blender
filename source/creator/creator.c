@@ -54,17 +54,18 @@
 #include "BKE_cachefile.h"
 #include "BKE_callbacks.h"
 #include "BKE_context.h"
-#include "BKE_font.h"
 #include "BKE_global.h"
 #include "BKE_gpencil_modifier.h"
 #include "BKE_idtype.h"
 #include "BKE_image.h"
+#include "BKE_main.h"
 #include "BKE_material.h"
 #include "BKE_modifier.h"
 #include "BKE_node.h"
 #include "BKE_particle.h"
 #include "BKE_shader_fx.h"
 #include "BKE_sound.h"
+#include "BKE_vfont.h"
 #include "BKE_volume.h"
 
 #include "DEG_depsgraph.h"
@@ -242,6 +243,7 @@ void gmp_blender_init_allocator()
   mp_set_memory_functions(gmp_alloc, gmp_realloc, gmp_free);
 }
 #endif
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -414,7 +416,6 @@ int main(int argc,
 
   BKE_idtype_init();
   BKE_cachefiles_init();
-  BKE_images_init();
   BKE_modifier_init();
   BKE_gpencil_modifier_init();
   BKE_shaderfx_init();
@@ -552,7 +553,9 @@ int main(int argc,
     WM_exit(C);
   }
   else {
-    if (!G.file_loaded) {
+    /* When no file is loaded, show the splash screen. */
+    const char *blendfile_path = BKE_main_blendfile_path_from_global();
+    if (blendfile_path[0] == '\0') {
       WM_init_splash(C);
     }
     WM_main(C);

@@ -251,12 +251,6 @@ bool imb_is_a_iris(const uchar *mem, size_t size)
   return ((GS(mem) == IMAGIC) || (GSS(mem) == IMAGIC));
 }
 
-/*
- * longimagedata -
- * read in a B/W RGB or RGBA iris image file and return a
- * pointer to an array of ints.
- */
-
 struct ImBuf *imb_loadiris(const uchar *mem, size_t size, int flags, char colorspace[IM_MAX_SPACE])
 {
   uint *base, *lptr = NULL;
@@ -274,7 +268,7 @@ struct ImBuf *imb_loadiris(const uchar *mem, size_t size, int flags, char colors
     return NULL;
   }
 
-  /* Could pe part of the magic check above,
+  /* Could be part of the magic check above,
    * by convention this check only requests the size needed to read it's magic though. */
   if (size < HEADER_SIZE) {
     return NULL;

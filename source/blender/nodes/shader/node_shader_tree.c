@@ -139,27 +139,13 @@ static void foreach_nodeclass(Scene *UNUSED(scene), void *calldata, bNodeClassCa
 
 static void localize(bNodeTree *localtree, bNodeTree *UNUSED(ntree))
 {
-  bNode *node, *node_next;
-
   /* replace muted nodes and reroute nodes by internal links */
-  for (node = localtree->nodes.first; node; node = node_next) {
-    node_next = node->next;
-
+  LISTBASE_FOREACH_MUTABLE (bNode *, node, &localtree->nodes) {
     if (node->flag & NODE_MUTED || node->type == NODE_REROUTE) {
       nodeInternalRelink(localtree, node);
       ntreeFreeLocalNode(localtree, node);
     }
   }
-}
-
-static void local_sync(bNodeTree *localtree, bNodeTree *ntree)
-{
-  BKE_node_preview_sync_tree(ntree, localtree);
-}
-
-static void local_merge(Main *UNUSED(bmain), bNodeTree *localtree, bNodeTree *ntree)
-{
-  BKE_node_preview_merge_tree(ntree, localtree, true);
 }
 
 static void update(bNodeTree *ntree)
@@ -174,12 +160,12 @@ static void update(bNodeTree *ntree)
   }
 }
 
-static bool shader_validate_link(bNodeTree *UNUSED(ntree), bNodeLink *link)
+static bool shader_validate_link(eNodeSocketDatatype from, eNodeSocketDatatype to)
 {
   /* Can't connect shader into other socket types, other way around is fine
    * since it will be interpreted as emission. */
-  if (link->fromsock->type == SOCK_SHADER) {
-    return (link->tosock->type == SOCK_SHADER);
+  if (from == SOCK_SHADER) {
+    return to == SOCK_SHADER;
   }
   return true;
 }
@@ -201,13 +187,11 @@ void register_node_tree_type_sh(void)
   tt->type = NTREE_SHADER;
   strcpy(tt->idname, "ShaderNodeTree");
   strcpy(tt->ui_name, N_("Shader Editor"));
-  tt->ui_icon = 0; /* defined in drawnode.c */
+  tt->ui_icon = 0; /* Defined in `drawnode.c`. */
   strcpy(tt->ui_description, N_("Shader nodes"));
 
   tt->foreach_nodeclass = foreach_nodeclass;
   tt->localize = localize;
-  tt->local_sync = local_sync;
-  tt->local_merge = local_merge;
   tt->update = update;
   tt->poll = shader_tree_poll;
   tt->get_from_context = shader_get_from_context;
@@ -221,13 +205,6 @@ void register_node_tree_type_sh(void)
 
 /* GPU material from shader nodes */
 
-/* Find an output node of the shader tree.
- *
- * NOTE: it will only return output which is NOT in the group, which isn't how
- * render engines works but it's how the GPU shader compilation works. This we
- * can change in the future and make it a generic function, but for now it stays
- * private here.
- */
 bNode *ntreeShaderOutputNode(bNodeTree *ntree, int target)
 {
   /* Make sure we only have single node tagged as output. */
@@ -887,7 +864,6 @@ void ntree_shader_tag_nodes(bNodeTree *ntree, bNode *output_node, nTreeTags *tag
   nodeChainIterBackwards(ntree, output_node, ntree_tag_bsdf_cb, tags, 0);
 }
 
-/* This one needs to work on a local tree. */
 void ntreeGPUMaterialNodes(bNodeTree *localtree,
                            GPUMaterial *mat,
                            bool *has_surface_output,

@@ -166,7 +166,8 @@ static int screenshot_invoke(bContext *C, wmOperator *op, const wmEvent *event)
   if (use_crop) {
     area = CTX_wm_area(C);
     bScreen *screen = CTX_wm_screen(C);
-    ScrArea *area_test = BKE_screen_find_area_xy(screen, SPACE_TYPE_ANY, event->x, event->y);
+    ScrArea *area_test = BKE_screen_find_area_xy(
+        screen, SPACE_TYPE_ANY, event->xy[0], event->xy[1]);
     if (area_test != NULL) {
       area = area_test;
     }
@@ -179,8 +180,9 @@ static int screenshot_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 
     /* extension is added by 'screenshot_check' after */
     char filepath[FILE_MAX] = "//screen";
-    if (G.relbase_valid) {
-      BLI_strncpy(filepath, BKE_main_blendfile_path_from_global(), sizeof(filepath));
+    const char *blendfile_path = BKE_main_blendfile_path_from_global();
+    if (blendfile_path[0] != '\0') {
+      BLI_strncpy(filepath, blendfile_path, sizeof(filepath));
       BLI_path_extension_replace(filepath, sizeof(filepath), ""); /* strip '.blend' */
     }
     RNA_string_set(op->ptr, "filepath", filepath);
@@ -270,9 +272,10 @@ void SCREEN_OT_screenshot(wmOperatorType *ot)
 
 void SCREEN_OT_screenshot_area(wmOperatorType *ot)
 {
-  ot->name = "Save Screenshot (Area)";
+  /* NOTE: the term "area" is a Blender internal name, "Editor" makes more sense for the UI. */
+  ot->name = "Save Screenshot (Editor)";
   ot->idname = "SCREEN_OT_screenshot_area";
-  ot->description = "Capture a picture of the active area";
+  ot->description = "Capture a picture of an editor";
 
   screen_screenshot_impl(ot);
 

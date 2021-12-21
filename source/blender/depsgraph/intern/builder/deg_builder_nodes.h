@@ -55,6 +55,7 @@ struct Scene;
 struct Simulation;
 struct Speaker;
 struct Tex;
+struct VFont;
 struct World;
 struct bAction;
 struct bArmature;
@@ -101,6 +102,10 @@ class DepsgraphNodeBuilder : public DepsgraphBuilder {
   virtual void begin_build();
   virtual void end_build();
 
+  /**
+   * `id_cow_self` is the user of `id_pointer`,
+   * see also `LibraryIDLinkCallbackData` struct definition.
+   */
   int foreach_id_cow_detect_need_for_update_callback(ID *id_cow_self, ID *id_pointer);
 
   IDNode *add_id_node(ID *id);
@@ -198,10 +203,23 @@ class DepsgraphNodeBuilder : public DepsgraphBuilder {
   virtual void build_rigidbody(Scene *scene);
   virtual void build_particle_systems(Object *object, bool is_object_visible);
   virtual void build_particle_settings(ParticleSettings *part);
+  /**
+   * Build graph nodes for #AnimData block and any animated images used.
+   * \param id: ID-Block which hosts the #AnimData
+   */
   virtual void build_animdata(ID *id);
   virtual void build_animdata_nlastrip_targets(ListBase *strips);
+  /**
+   * Build graph nodes to update the current frame in image users.
+   */
   virtual void build_animation_images(ID *id);
   virtual void build_action(bAction *action);
+  /**
+   * Build graph node(s) for Driver
+   * \param id: ID-Block that driver is attached to
+   * \param fcurve: Driver-FCurve
+   * \param driver_index: Index in animation data drivers list
+   */
   virtual void build_driver(ID *id, FCurve *fcurve, int driver_index);
   virtual void build_driver_variables(ID *id, FCurve *fcurve);
   virtual void build_driver_id_property(ID *id, const char *rna_path);
@@ -235,6 +253,7 @@ class DepsgraphNodeBuilder : public DepsgraphBuilder {
   virtual void build_scene_sequencer(Scene *scene);
   virtual void build_scene_audio(Scene *scene);
   virtual void build_scene_speakers(Scene *scene, ViewLayer *view_layer);
+  virtual void build_vfont(VFont *vfont);
 
   /* Per-ID information about what was already in the dependency graph.
    * Allows to re-use certain values, to speed up following evaluation. */
@@ -278,6 +297,10 @@ class DepsgraphNodeBuilder : public DepsgraphBuilder {
                               void *user_data);
 
   void tag_previously_tagged_nodes();
+  /**
+   * Check for IDs that need to be flushed (COW-updated)
+   * because the depsgraph itself created or removed some of their evaluated dependencies.
+   */
   void update_invalid_cow_pointers();
 
   /* State which demotes currently built entities. */

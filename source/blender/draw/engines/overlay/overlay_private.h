@@ -139,9 +139,10 @@ typedef struct OVERLAY_ShadingData {
   /** Grid */
   float grid_axes[3], grid_distance;
   float zplane_axes[3], grid_size[3];
-  float grid_steps[8];
+  float grid_steps[SI_GRID_STEPS_LEN];
   float inv_viewport_size[2];
   float grid_line_size;
+  float zoom_factor; /* Only for UV editor */
   int grid_flag;
   int zpos_flag;
   int zneg_flag;
@@ -509,6 +510,9 @@ void OVERLAY_xray_fade_draw(OVERLAY_Data *vedata);
 void OVERLAY_xray_depth_copy(OVERLAY_Data *vedata);
 void OVERLAY_xray_depth_infront_copy(OVERLAY_Data *vedata);
 
+/**
+ * Return true if armature should be handled by the pose mode engine.
+ */
 bool OVERLAY_armature_is_pose_mode(Object *ob, const struct DRWContextState *draw_ctx);
 void OVERLAY_armature_cache_init(OVERLAY_Data *vedata);
 void OVERLAY_armature_cache_populate(OVERLAY_Data *vedata, Object *ob);
@@ -630,6 +634,10 @@ void OVERLAY_image_empty_cache_populate(OVERLAY_Data *vedata, Object *ob);
 void OVERLAY_image_cache_finish(OVERLAY_Data *vedata);
 void OVERLAY_image_draw(OVERLAY_Data *vedata);
 void OVERLAY_image_background_draw(OVERLAY_Data *vedata);
+/**
+ * This function draws images that needs the view transform applied.
+ * It draws these images directly into the scene color buffer.
+ */
 void OVERLAY_image_scene_background_draw(OVERLAY_Data *vedata);
 void OVERLAY_image_in_front_draw(OVERLAY_Data *vedata);
 

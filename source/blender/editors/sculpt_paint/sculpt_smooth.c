@@ -102,8 +102,6 @@ void SCULPT_neighbor_coords_average_interior(SculptSession *ss, float result[3],
   mul_v3_v3fl(result, avg, 1.0f / total);
 }
 
-/* For bmesh: Average surrounding verts based on an orthogonality measure.
- * Naturally converges to a quad-like structure. */
 void SCULPT_bmesh_four_neighbor_average(float avg[3], float direction[3], BMVert *v)
 {
 
@@ -395,7 +393,12 @@ void SCULPT_smooth(Sculpt *sd,
 void SCULPT_do_smooth_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int totnode)
 {
   SculptSession *ss = ob->sculpt;
-  if (ss->cache->bstrength <= 0.0f) {
+
+  /* NOTE: The enhance brush needs to initialize its state on the first brush step. The stroke
+   * strength can become 0 during the stroke, but it can not change sign (the sign is determined
+   * in the beginning of the stroke. So here it is important to not switch to enhance brush in the
+   * middle of the stroke. */
+  if (ss->cache->bstrength < 0.0f) {
     /* Invert mode, intensify details. */
     SCULPT_enhance_details_brush(sd, ob, nodes, totnode);
   }

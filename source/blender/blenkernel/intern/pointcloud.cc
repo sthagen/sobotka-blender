@@ -79,7 +79,7 @@ static void pointcloud_copy_data(Main *UNUSED(bmain), ID *id_dst, const ID *id_s
 {
   PointCloud *pointcloud_dst = (PointCloud *)id_dst;
   const PointCloud *pointcloud_src = (const PointCloud *)id_src;
-  pointcloud_dst->mat = static_cast<Material **>(MEM_dupallocN(pointcloud_dst->mat));
+  pointcloud_dst->mat = static_cast<Material **>(MEM_dupallocN(pointcloud_src->mat));
 
   const eCDAllocType alloc_type = (flag & LIB_ID_COPY_CD_REFERENCE) ? CD_REFERENCE : CD_DUPLICATE;
   CustomData_copy(&pointcloud_src->pdata,
@@ -105,7 +105,7 @@ static void pointcloud_foreach_id(ID *id, LibraryForeachIDData *data)
 {
   PointCloud *pointcloud = (PointCloud *)id;
   for (int i = 0; i < pointcloud->totcol; i++) {
-    BKE_LIB_FOREACHID_PROCESS(data, pointcloud->mat[i], IDWALK_CB_USER);
+    BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, pointcloud->mat[i], IDWALK_CB_USER);
   }
 }
 
@@ -174,7 +174,8 @@ IDTypeInfo IDType_ID_PT = {
     /* name */ "PointCloud",
     /* name_plural */ "pointclouds",
     /* translation_context */ BLT_I18NCONTEXT_ID_POINTCLOUD,
-    /* flags */ 0,
+    /* flags */ IDTYPE_FLAGS_APPEND_IS_REUSABLE,
+    /* asset_type_info */ nullptr,
 
     /* init_data */ pointcloud_init_data,
     /* copy_data */ pointcloud_copy_data,
@@ -182,6 +183,7 @@ IDTypeInfo IDType_ID_PT = {
     /* make_local */ nullptr,
     /* foreach_id */ pointcloud_foreach_id,
     /* foreach_cache */ nullptr,
+    /* foreach_path */ nullptr,
     /* owner_get */ nullptr,
 
     /* blend_write */ pointcloud_blend_write,
@@ -417,6 +419,7 @@ void BKE_pointcloud_data_update(struct Depsgraph *depsgraph, struct Scene *scene
 }
 
 /* Draw Cache */
+
 void (*BKE_pointcloud_batch_cache_dirty_tag_cb)(PointCloud *pointcloud, int mode) = nullptr;
 void (*BKE_pointcloud_batch_cache_free_cb)(PointCloud *pointcloud) = nullptr;
 

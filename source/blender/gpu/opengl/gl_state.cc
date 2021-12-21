@@ -52,6 +52,7 @@ GLStateManager::GLStateManager()
   glDisable(GL_DITHER);
 
   glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+  glPixelStorei(GL_PACK_ALIGNMENT, 1);
   glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
 
   glPrimitiveRestartIndex((GLuint)0xFFFFFFFF);
@@ -83,7 +84,6 @@ void GLStateManager::apply_state()
   active_fb->apply_state();
 };
 
-/* Will set all the states regardless of the current ones. */
 void GLStateManager::force_state()
 {
   /* Little exception for clip distances since they need to keep the old count correct. */
@@ -481,7 +481,6 @@ void GLStateManager::texture_bind(Texture *tex_, eGPUSamplerState sampler_type, 
   dirty_texture_binds_ |= 1ULL << unit;
 }
 
-/* Bind the texture to slot 0 for editing purpose. Used by legacy pipeline. */
 void GLStateManager::texture_bind_temp(GLTexture *tex)
 {
   glActiveTexture(GL_TEXTURE0);

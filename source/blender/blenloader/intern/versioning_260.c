@@ -1384,7 +1384,6 @@ void blo_do_versions_260(FileData *fd, Library *UNUSED(lib), Main *bmain)
 
             tex->iuser.frames = 1;
             tex->iuser.sfra = 1;
-            tex->iuser.ok = 1;
           }
         }
       }
@@ -1800,7 +1799,7 @@ void blo_do_versions_260(FileData *fd, Library *UNUSED(lib), Main *bmain)
             }
             case SPACE_SEQ: {
               SpaceSeq *sseq = (SpaceSeq *)sl;
-              sseq->flag |= SEQ_SHOW_GPENCIL;
+              sseq->flag |= SEQ_PREVIEW_SHOW_GPENCIL;
               break;
             }
             case SPACE_IMAGE: {
@@ -1893,7 +1892,7 @@ void blo_do_versions_260(FileData *fd, Library *UNUSED(lib), Main *bmain)
 
     for (cu = bmain->curves.first; cu; cu = cu->id.next) {
       if (cu->flag & (CU_FRONT | CU_BACK)) {
-        if (cu->ext1 != 0.0f || cu->ext2 != 0.0f) {
+        if (cu->extrude != 0.0f || cu->bevel_radius != 0.0f) {
           Nurb *nu;
 
           for (nu = cu->nurb.first; nu; nu = nu->next) {

@@ -78,8 +78,6 @@ static void outliner_show_active(SpaceOutliner *space_outliner,
                                  TreeElement *te,
                                  ID *id);
 
-/** \} */
-
 /* -------------------------------------------------------------------- */
 /** \name Highlight on Cursor Motion Operator
  * \{ */
@@ -154,9 +152,6 @@ void OUTLINER_OT_highlight_update(wmOperatorType *ot)
 /** \name Toggle Open/Closed Operator
  * \{ */
 
-/**
- * Open or close a tree element, optionally toggling all children recursively.
- */
 void outliner_item_openclose(SpaceOutliner *space_outliner,
                              TreeElement *te,
                              bool open,
@@ -659,7 +654,7 @@ static int outliner_id_remap_invoke(bContext *C, wmOperator *op, const wmEvent *
     outliner_id_remap_find_tree_element(C, op, &space_outliner->tree, fmval[1]);
   }
 
-  return WM_operator_props_dialog_popup(C, op, 200);
+  return WM_operator_props_dialog_popup(C, op, 400);
 }
 
 static const EnumPropertyItem *outliner_id_itemf(bContext *C,
@@ -708,6 +703,8 @@ void OUTLINER_OT_id_remap(wmOperatorType *ot)
 
   prop = RNA_def_enum(ot->srna, "id_type", rna_enum_id_type_items, ID_OB, "ID Type", "");
   RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_ID);
+  /* Changing ID type wont make sense, would return early with "Invalid old/new ID pair" anyways. */
+  RNA_def_property_flag(prop, PROP_HIDDEN);
 
   prop = RNA_def_enum(ot->srna, "old_id", DummyRNA_NULL_items, 0, "Old ID", "Old ID to replace");
   RNA_def_property_enum_funcs_runtime(prop, NULL, NULL, outliner_id_itemf);
@@ -763,7 +760,7 @@ static int outliner_id_copy_tag(SpaceOutliner *space_outliner, ListBase *tree)
     if (tselem->flag & TSE_SELECTED && ELEM(tselem->type, TSE_SOME_ID, TSE_LAYER_COLLECTION)) {
       ID *id = tselem->id;
       if (!(id->tag & LIB_TAG_DOIT)) {
-        BKE_copybuffer_tag_ID(tselem->id);
+        BKE_copybuffer_copy_tag_ID(tselem->id);
         num_ids++;
       }
     }
@@ -781,7 +778,7 @@ static int outliner_id_copy_exec(bContext *C, wmOperator *op)
   SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
   char str[FILE_MAX];
 
-  BKE_copybuffer_begin(bmain);
+  BKE_copybuffer_copy_begin(bmain);
 
   const int num_ids = outliner_id_copy_tag(space_outliner, &space_outliner->tree);
   if (num_ids == 0) {
@@ -790,7 +787,7 @@ static int outliner_id_copy_exec(bContext *C, wmOperator *op)
   }
 
   BLI_join_dirfile(str, sizeof(str), BKE_tempdir_base(), "copybuffer.blend");
-  BKE_copybuffer_save(bmain, str, op->reports);
+  BKE_copybuffer_copy_end(bmain, str, op->reports);
 
   BKE_reportf(op->reports, RPT_INFO, "Copied %d selected data-block(s)", num_ids);
 
@@ -964,9 +961,6 @@ void OUTLINER_OT_lib_relocate(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
-/* XXX This does not work with several items
- * (it is only called once in the end, due to the 'deferred'
- * file-browser invocation through event system...). */
 void lib_relocate_fn(bContext *C,
                      ReportList *UNUSED(reports),
                      Scene *UNUSED(scene),
@@ -975,6 +969,10 @@ void lib_relocate_fn(bContext *C,
                      TreeStoreElem *tselem,
                      void *UNUSED(user_data))
 {
+  /* XXX: This does not work with several items
+   * (it is only called once in the end, due to the 'deferred'
+   * file-browser invocation through event system...). */
+
   wmOperatorType *ot = WM_operatortype_find("WM_OT_lib_relocate", false);
 
   lib_relocate(C, te, tselem, ot, false);
@@ -1068,10 +1066,6 @@ int outliner_flag_is_any_test(ListBase *lb, short flag, const int curlevel)
   return 0;
 }
 
-/**
- * Set or unset \a flag for all outliner elements in \a lb and sub-trees.
- * \return if any flag was modified.
- */
 bool outliner_flag_set(ListBase *lb, short flag, short set)
 {
   bool changed = false;
@@ -1225,7 +1219,6 @@ static void outliner_set_coordinates_element_recursive(SpaceOutliner *space_outl
   }
 }
 
-/* to retrieve coordinates with redrawing the entire tree */
 void outliner_set_coordinates(ARegion *region, SpaceOutliner *space_outliner)
 {
   int starty = (int)(region->v2d.tot.ymax) - UI_UNIT_Y;
@@ -2233,8 +2226,6 @@ static bool ed_operator_outliner_id_orphans_active(bContext *C)
   }
   return true;
 }
-
-/** \} */
 
 static int outliner_orphans_purge_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
 {

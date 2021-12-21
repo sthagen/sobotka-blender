@@ -56,6 +56,7 @@ namespace blender::draw {
 /* ---------------------------------------------------------------------- */
 /** \name Mesh Elements Extract Struct
  * \{ */
+
 using TaskId = int;
 using TaskLen = int;
 
@@ -158,6 +159,7 @@ class ExtractorRunDatas : public Vector<ExtractorRunData> {
 /* ---------------------------------------------------------------------- */
 /** \name ExtractTaskData
  * \{ */
+
 struct ExtractTaskData {
   const MeshRenderData *mr = nullptr;
   MeshBatchCache *cache = nullptr;
@@ -495,6 +497,7 @@ static struct TaskNode *extract_task_node_create(struct TaskGraph *task_graph,
 /* ---------------------------------------------------------------------- */
 /** \name Task Node - Update Mesh Render Data
  * \{ */
+
 struct MeshRenderDataUpdateTaskData {
   MeshRenderData *mr = nullptr;
   MeshBufferCache *cache = nullptr;
@@ -650,6 +653,9 @@ static void mesh_buffer_cache_create_requested(struct TaskGraph *task_graph,
   EXTRACT_ADD_REQUESTED(vbo, vert_idx);
   EXTRACT_ADD_REQUESTED(vbo, fdot_idx);
   EXTRACT_ADD_REQUESTED(vbo, skin_roots);
+  for (int i = 0; i < GPU_MAX_ATTR; i++) {
+    EXTRACT_ADD_REQUESTED(vbo, attr[i]);
+  }
 
   EXTRACT_ADD_REQUESTED(ibo, tris);
   if (DRW_ibo_requested(mbuflist->ibo.lines_loose)) {
@@ -775,6 +781,8 @@ static void mesh_buffer_cache_create_requested(struct TaskGraph *task_graph,
 #endif
 }
 
+/** \} */
+
 }  // namespace blender::draw
 
 extern "C" {
@@ -811,5 +819,3 @@ void mesh_buffer_cache_create_requested(struct TaskGraph *task_graph,
 }
 
 }  // extern "C"
-
-/** \} */
