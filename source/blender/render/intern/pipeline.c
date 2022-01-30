@@ -73,6 +73,8 @@
 #include "BKE_sound.h"
 #include "BKE_writeavi.h" /* <------ should be replaced once with generic movie module */
 
+#include "NOD_composite.h"
+
 #include "DEG_depsgraph.h"
 #include "DEG_depsgraph_build.h"
 #include "DEG_depsgraph_debug.h"
@@ -1131,7 +1133,7 @@ static void do_render_compositor_scenes(Render *re)
             render_scene_has_layers_to_render(scene, false)) {
           do_render_compositor_scene(re, scene, cfra);
           BLI_gset_add(scenes_rendered, scene);
-          nodeUpdate(restore_scene->nodetree, node);
+          node->typeinfo->updatefunc(restore_scene->nodetree, node);
         }
       }
     }

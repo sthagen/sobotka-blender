@@ -34,6 +34,7 @@
 #include "BKE_lib_id.h"
 #include "BKE_main.h"
 #include "BKE_node.h"
+#include "BKE_node_tree_update.h"
 #include "BKE_screen.h"
 
 #include "ED_node.h" /* own include */
@@ -67,125 +68,6 @@
 #include "node_intern.hh" /* own include */
 
 using namespace blender::nodes::node_tree_ref_types;
-using blender::float2;
-using blender::StringRef;
-using blender::StringRefNull;
-using blender::Vector;
-
-/* -------------------------------------------------------------------- */
-/** \name Relations Helpers
- * \{ */
-
-static bool ntree_has_drivers(bNodeTree &ntree)
-{
-  const AnimData *adt = BKE_animdata_from_id(&ntree.id);
-  if (adt == nullptr) {
-    return false;
-  }
-  return !BLI_listbase_is_empty(&adt->drivers);
-}
-
-static bool ntree_check_nodes_connected_dfs(bNodeTree &ntree, bNode &from, bNode &to)
-{
-  if (from.flag & NODE_TEST) {
-    return false;
-  }
-  from.flag |= NODE_TEST;
-  LISTBASE_FOREACH (bNodeLink *, link, &ntree.links) {
-    if (link->fromnode == &from) {
-      if (link->tonode == &to) {
-        return true;
-      }
-
-      if (ntree_check_nodes_connected_dfs(ntree, *link->tonode, to)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-static bool ntree_check_nodes_connected(bNodeTree &ntree, bNode &from, bNode &to)
-{
-  if (&from == &to) {
-    return true;
-  }
-  ntreeNodeFlagSet(&ntree, NODE_TEST, false);
-  return ntree_check_nodes_connected_dfs(ntree, from, to);
-}
-
-static bool node_group_has_output_dfs(bNode &node)
-{
-  bNodeTree *ntree = (bNodeTree *)node.id;
-  if (ntree->id.tag & LIB_TAG_DOIT) {
-    return false;
-  }
-  ntree->id.tag |= LIB_TAG_DOIT;
-  LISTBASE_FOREACH (bNode *, current_node, &ntree->nodes) {
-    if (current_node->type == NODE_GROUP) {
-      if (current_node->id && node_group_has_output_dfs(*current_node)) {
-        return true;
-      }
-    }
-    if (current_node->flag & NODE_DO_OUTPUT && current_node->type != NODE_GROUP_OUTPUT) {
-      return true;
-    }
-  }
-  return false;
-}
-
-static bool node_group_has_output(Main &bmain, bNode &node)
-{
-  BLI_assert(ELEM(node.type, NODE_GROUP, NODE_CUSTOM_GROUP));
-  bNodeTree *ntree = (bNodeTree *)node.id;
-  if (ntree == nullptr) {
-    return false;
-  }
-  BKE_main_id_tag_listbase(&bmain.nodetrees, LIB_TAG_DOIT, false);
-  return node_group_has_output_dfs(node);
-}
-
-bool node_connected_to_output(Main &bmain, bNodeTree &ntree, bNode &node)
-{
-  /* Special case for drivers: if node tree has any drivers we assume it is
-   * always to be tagged for update when node changes. Otherwise we will be
-   * doomed to do some deep and nasty deep search of indirect dependencies,
-   * which will be too complicated without real benefit.
-   */
-  if (ntree_has_drivers(ntree)) {
-    return true;
-  }
-  LISTBASE_FOREACH (bNode *, current_node, &ntree.nodes) {
-    /* Special case for group nodes -- if modified node connected to a group
-     * with active output inside we consider refresh is needed.
-     *
-     * We could make check more grained here by taking which socket the node
-     * is connected to and so eventually.
-     */
-    if (ELEM(current_node->type, NODE_GROUP, NODE_CUSTOM_GROUP)) {
-      if (current_node->id != nullptr && ntree_has_drivers((bNodeTree &)current_node->id)) {
-        return true;
-      }
-      if (ntree_check_nodes_connected(ntree, node, *current_node) &&
-          node_group_has_output(bmain, *current_node)) {
-        return true;
-      }
-    }
-    if (current_node->flag & NODE_DO_OUTPUT) {
-      if (ntree_check_nodes_connected(ntree, node, *current_node)) {
-        return true;
-      }
-    }
-    if (current_node->type == GEO_NODE_VIEWER) {
-      if (ntree_check_nodes_connected(ntree, node, *current_node)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Add Node
@@ -214,9 +96,11 @@ static void clear_picking_highlight(ListBase *links)
   }
 }
 
-static bNodeLink *create_drag_link(Main &bmain, SpaceNode &snode, bNode &node, bNodeSocket &sock)
+namespace blender::ed::space_node {
+
+static bNodeLink *create_drag_link(bNode &node, bNodeSocket &sock)
 {
-  bNodeLink *oplink = (bNodeLink *)MEM_callocN(sizeof(bNodeLink), __func__);
+  bNodeLink *oplink = MEM_cnew<bNodeLink>(__func__);
   if (sock.in_out == SOCK_OUT) {
     oplink->fromnode = &node;
     oplink->fromsock = &sock;
@@ -226,27 +110,17 @@ static bNodeLink *create_drag_link(Main &bmain, SpaceNode &snode, bNode &node, b
     oplink->tosock = &sock;
   }
   oplink->flag |= NODE_LINK_VALID;
-  oplink->flag &= ~NODE_LINK_TEST;
-  if (node_connected_to_output(bmain, *snode.edittree, node)) {
-    oplink->flag |= NODE_LINK_TEST;
-  }
   oplink->flag |= NODE_LINK_DRAGGED;
   return oplink;
 }
 
-static void pick_link(const bContext &C,
-                      wmOperator &op,
-                      bNodeLinkDrag &nldrag,
-                      SpaceNode &snode,
-                      bNode *node,
-                      bNodeLink &link_to_pick)
+static void pick_link(
+    wmOperator &op, bNodeLinkDrag &nldrag, SpaceNode &snode, bNode *node, bNodeLink &link_to_pick)
 {
   clear_picking_highlight(&snode.edittree->links);
   RNA_boolean_set(op.ptr, "has_link_picked", true);
 
-  Main *bmain = CTX_data_main(&C);
-  bNodeLink *link = create_drag_link(
-      *bmain, snode, *link_to_pick.fromnode, *link_to_pick.fromsock);
+  bNodeLink *link = create_drag_link(*link_to_pick.fromnode, *link_to_pick.fromsock);
 
   nldrag.links.append(link);
   nodeRemLink(snode.edittree, &link_to_pick);
@@ -258,7 +132,7 @@ static void pick_link(const bContext &C,
 
   /* Send changed event to original link->tonode. */
   if (node) {
-    snode_update(snode, node);
+    BKE_ntree_update_tag_node_property(snode.edittree, node);
   }
 }
 
@@ -324,7 +198,7 @@ static void pick_input_link_by_link_intersect(const bContext &C,
     ED_area_tag_redraw(CTX_wm_area(&C));
 
     if (!node_find_indicated_socket(*snode, &node, &socket, cursor, SOCK_IN)) {
-      pick_link(C, op, nldrag, *snode, node, *link_to_pick);
+      pick_link(op, nldrag, *snode, node, *link_to_pick);
     }
   }
 }
@@ -336,7 +210,10 @@ static bool socket_is_available(bNodeTree *UNUSED(ntree), bNodeSocket *sock, con
   }
 
   if (!allow_used && (sock->flag & SOCK_IN_USE)) {
-    return false;
+    /* Multi input sockets are available (even if used). */
+    if (!(sock->flag & SOCK_MULTI_INPUT)) {
+      return false;
+    }
   }
 
   return true;
@@ -566,7 +443,7 @@ static void snode_autoconnect(Main &bmain,
   }
 
   if (numlinks > 0) {
-    ntreeUpdateTree(&bmain, ntree);
+    BKE_ntree_update_main_tree(&bmain, ntree, nullptr);
   }
 }
 
@@ -576,7 +453,7 @@ static void snode_autoconnect(Main &bmain,
 /** \name Link Viewer Operator
  * \{ */
 
-namespace blender::ed::nodes::viewer_linking {
+namespace viewer_linking {
 
 /* Depending on the node tree type, different socket types are supported by viewer nodes. */
 static bool socket_can_be_viewed(const OutputSocketRef &socket)
@@ -640,7 +517,7 @@ static bNodeSocket *node_link_viewer_get_socket(bNodeTree &ntree,
           (eNodeSocketDatatype)src_socket.type);
       BLI_assert(data_type != CD_AUTO_FROM_NAME);
       storage->data_type = data_type;
-      nodeUpdate(&ntree, &viewer_node);
+      viewer_node.typeinfo->updatefunc(&ntree, &viewer_node);
       return viewer_socket;
     }
   }
@@ -810,7 +687,7 @@ static int link_socket_to_viewer(const bContext &C,
   else {
     link_to_change->fromnode = &bnode_to_view;
     link_to_change->fromsock = &bsocket_to_view;
-    btree.update |= NTREE_UPDATE_LINKS;
+    BKE_ntree_update_tag_link_changed(&btree);
   }
 
   remove_links_to_unavailable_viewer_sockets(btree, *viewer_bnode);
@@ -819,10 +696,7 @@ static int link_socket_to_viewer(const bContext &C,
     ED_spreadsheet_context_paths_set_geometry_node(CTX_data_main(&C), &snode, viewer_bnode);
   }
 
-  ntreeUpdateTree(CTX_data_main(&C), &btree);
-  snode_update(snode, viewer_bnode);
-  DEG_id_tag_update(&btree.id, 0);
-
+  ED_node_tree_propagate_change(&C, CTX_data_main(&C), &btree);
   return OPERATOR_FINISHED;
 }
 
@@ -846,7 +720,7 @@ static int node_link_viewer(const bContext &C, bNode &bnode_to_view)
   return link_socket_to_viewer(C, viewer_bnode, bnode_to_view, bsocket_to_view);
 }
 
-}  // namespace blender::ed::nodes::viewer_linking
+}  // namespace viewer_linking
 
 static int node_active_link_viewer_exec(bContext *C, wmOperator *UNUSED(op))
 {
@@ -859,11 +733,11 @@ static int node_active_link_viewer_exec(bContext *C, wmOperator *UNUSED(op))
 
   ED_preview_kill_jobs(CTX_wm_manager(C), CTX_data_main(C));
 
-  if (blender::ed::nodes::viewer_linking::node_link_viewer(*C, *node) == OPERATOR_CANCELLED) {
+  if (viewer_linking::node_link_viewer(*C, *node) == OPERATOR_CANCELLED) {
     return OPERATOR_CANCELLED;
   }
 
-  snode_notify(*C, snode);
+  ED_node_tree_propagate_change(C, CTX_data_main(C), snode.edittree);
 
   return OPERATOR_FINISHED;
 }
@@ -1041,17 +915,10 @@ static void node_link_exit(bContext &C, wmOperator &op, const bool apply_links)
   SpaceNode &snode = *CTX_wm_space_node(&C);
   bNodeTree &ntree = *snode.edittree;
   bNodeLinkDrag *nldrag = (bNodeLinkDrag *)op.customdata;
-  bool do_tag_update = false;
 
   /* avoid updates while applying links */
   ntree.is_updating = true;
   for (bNodeLink *link : nldrag->links) {
-    /* See note below, but basically TEST flag means that the link
-     * was connected to output (or to a node which affects the
-     * output).
-     */
-    do_tag_update |= (link->flag & NODE_LINK_TEST) != 0;
-
     link->flag &= ~NODE_LINK_DRAGGED;
 
     if (apply_links && link->tosock && link->fromsock) {
@@ -1067,18 +934,10 @@ static void node_link_exit(bContext &C, wmOperator &op, const bool apply_links)
 
       /* add link to the node tree */
       BLI_addtail(&ntree.links, link);
-
-      ntree.update |= NTREE_UPDATE_LINKS;
-
-      /* tag tonode for update */
-      link->tonode->update |= NODE_UPDATE;
+      BKE_ntree_update_tag_link_added(&ntree, link);
 
       /* we might need to remove a link */
       node_remove_extra_links(snode, *link);
-
-      if (link->tonode) {
-        do_tag_update |= (do_tag_update || node_connected_to_output(*bmain, ntree, *link->tonode));
-      }
     }
     else {
       nodeRemLink(&ntree, link);
@@ -1086,11 +945,7 @@ static void node_link_exit(bContext &C, wmOperator &op, const bool apply_links)
   }
   ntree.is_updating = false;
 
-  ntreeUpdateTree(bmain, &ntree);
-  snode_notify(C, snode);
-  if (do_tag_update) {
-    snode_dag_update(C, snode);
-  }
+  ED_node_tree_propagate_change(&C, bmain, &ntree);
 
   /* Ensure draglink tooltip is disabled. */
   draw_draglink_tooltip_deactivate(*CTX_wm_region(&C), *nldrag);
@@ -1219,12 +1074,10 @@ static int node_link_modal(bContext *C, wmOperator *op, const wmEvent *event)
         if (should_create_drag_link_search_menu(*snode.edittree, *nldrag)) {
           bNodeLink &link = *nldrag->links.first();
           if (nldrag->in_out == SOCK_OUT) {
-            blender::ed::space_node::invoke_node_link_drag_add_menu(
-                *C, *link.fromnode, *link.fromsock, cursor);
+            invoke_node_link_drag_add_menu(*C, *link.fromnode, *link.fromsock, cursor);
           }
           else {
-            blender::ed::space_node::invoke_node_link_drag_add_menu(
-                *C, *link.tonode, *link.tosock, cursor);
+            invoke_node_link_drag_add_menu(*C, *link.tonode, *link.tosock, cursor);
           }
         }
 
@@ -1250,8 +1103,7 @@ static int node_link_modal(bContext *C, wmOperator *op, const wmEvent *event)
   return OPERATOR_RUNNING_MODAL;
 }
 
-static std::unique_ptr<bNodeLinkDrag> node_link_init(Main &bmain,
-                                                     SpaceNode &snode,
+static std::unique_ptr<bNodeLinkDrag> node_link_init(SpaceNode &snode,
                                                      float2 cursor,
                                                      const bool detach)
 {
@@ -1270,22 +1122,11 @@ static std::unique_ptr<bNodeLinkDrag> node_link_init(Main &bmain,
       /* detach current links and store them in the operator data */
       LISTBASE_FOREACH_MUTABLE (bNodeLink *, link, &snode.edittree->links) {
         if (link->fromsock == sock) {
-          bNodeLink *oplink = (bNodeLink *)MEM_callocN(sizeof(bNodeLink), "drag link op link");
+          bNodeLink *oplink = MEM_cnew<bNodeLink>("drag link op link");
           *oplink = *link;
           oplink->next = oplink->prev = nullptr;
           oplink->flag |= NODE_LINK_VALID;
           oplink->flag |= NODE_LINK_DRAGGED;
-
-          /* The link could be disconnected and in that case we
-           * wouldn't be able to check whether tag update is
-           * needed or not when releasing mouse button. So we
-           * cache whether the link affects output or not here
-           * using TEST flag.
-           */
-          oplink->flag &= ~NODE_LINK_TEST;
-          if (node_connected_to_output(bmain, *snode.edittree, *link->tonode)) {
-            oplink->flag |= NODE_LINK_TEST;
-          }
 
           nldrag->links.append(oplink);
           nodeRemLink(snode.edittree, link);
@@ -1296,7 +1137,7 @@ static std::unique_ptr<bNodeLinkDrag> node_link_init(Main &bmain,
       /* dragged links are fixed on output side */
       nldrag->in_out = SOCK_OUT;
       /* create a new link */
-      nldrag->links.append(create_drag_link(bmain, snode, *node, *sock));
+      nldrag->links.append(create_drag_link(*node, *sock));
     }
     return nldrag;
   }
@@ -1324,22 +1165,18 @@ static std::unique_ptr<bNodeLinkDrag> node_link_init(Main &bmain,
       }
 
       if (link_to_pick != nullptr && !nldrag->from_multi_input_socket) {
-        bNodeLink *oplink = (bNodeLink *)MEM_callocN(sizeof(bNodeLink), "drag link op link");
+        bNodeLink *oplink = MEM_cnew<bNodeLink>("drag link op link");
         *oplink = *link_to_pick;
         oplink->next = oplink->prev = nullptr;
         oplink->flag |= NODE_LINK_VALID;
         oplink->flag |= NODE_LINK_DRAGGED;
-        oplink->flag &= ~NODE_LINK_TEST;
-        if (node_connected_to_output(bmain, *snode.edittree, *link_to_pick->tonode)) {
-          oplink->flag |= NODE_LINK_TEST;
-        }
 
         nldrag->links.append(oplink);
         nodeRemLink(snode.edittree, link_to_pick);
 
         /* send changed event to original link->tonode */
         if (node) {
-          snode_update(snode, node);
+          BKE_ntree_update_tag_node_property(snode.edittree, node);
         }
       }
     }
@@ -1347,7 +1184,7 @@ static std::unique_ptr<bNodeLinkDrag> node_link_init(Main &bmain,
       /* dragged links are fixed on input side */
       nldrag->in_out = SOCK_IN;
       /* create a new link */
-      nldrag->links.append(create_drag_link(bmain, snode, *node, *sock));
+      nldrag->links.append(create_drag_link(*node, *sock));
     }
     return nldrag;
   }
@@ -1370,7 +1207,7 @@ static int node_link_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 
   ED_preview_kill_jobs(CTX_wm_manager(C), &bmain);
 
-  std::unique_ptr<bNodeLinkDrag> nldrag = node_link_init(bmain, snode, cursor, detach);
+  std::unique_ptr<bNodeLinkDrag> nldrag = node_link_init(snode, cursor, detach);
 
   if (nldrag) {
     UI_view2d_edge_pan_operator_init(C, &nldrag->pan_data, op);
@@ -1473,9 +1310,7 @@ static int node_make_link_exec(bContext *C, wmOperator *op)
   node_deselect_all_input_sockets(snode, false);
   node_deselect_all_output_sockets(snode, false);
 
-  ntreeUpdateTree(CTX_data_main(C), snode.edittree);
-  snode_notify(*C, snode);
-  snode_dag_update(*C, snode);
+  ED_node_tree_propagate_change(C, CTX_data_main(C), snode.edittree);
 
   return OPERATOR_FINISHED;
 }
@@ -1532,7 +1367,6 @@ static int cut_links_exec(bContext *C, wmOperator *op)
   Main &bmain = *CTX_data_main(C);
   SpaceNode &snode = *CTX_wm_space_node(C);
   ARegion &region = *CTX_wm_region(C);
-  bool do_tag_update = false;
 
   int i = 0;
   float mcoords[256][2];
@@ -1567,23 +1401,14 @@ static int cut_links_exec(bContext *C, wmOperator *op)
           found = true;
         }
 
-        do_tag_update |= (do_tag_update ||
-                          node_connected_to_output(bmain, *snode.edittree, *link->tonode));
-
-        snode_update(snode, link->tonode);
         bNode *to_node = link->tonode;
         nodeRemLink(snode.edittree, link);
         sort_multi_input_socket_links(snode, *to_node, nullptr, nullptr);
       }
     }
 
+    ED_node_tree_propagate_change(C, CTX_data_main(C), snode.edittree);
     if (found) {
-      ntreeUpdateTree(CTX_data_main(C), snode.edittree);
-      snode_notify(*C, snode);
-      if (do_tag_update) {
-        snode_dag_update(*C, snode);
-      }
-
       return OPERATOR_FINISHED;
     }
 
@@ -1629,7 +1454,6 @@ static int mute_links_exec(bContext *C, wmOperator *op)
   Main &bmain = *CTX_data_main(C);
   SpaceNode &snode = *CTX_wm_space_node(C);
   ARegion &region = *CTX_wm_region(C);
-  bool do_tag_update = false;
 
   int i = 0;
   float mcoords[256][2];
@@ -1671,10 +1495,6 @@ static int mute_links_exec(bContext *C, wmOperator *op)
       }
 
       if (node_links_intersect(*link, mcoords, i)) {
-        do_tag_update |= (do_tag_update ||
-                          node_connected_to_output(bmain, *snode.edittree, *link->tonode));
-
-        snode_update(snode, link->tonode);
         nodeMuteLinkToggle(snode.edittree, link);
       }
     }
@@ -1687,12 +1507,7 @@ static int mute_links_exec(bContext *C, wmOperator *op)
       link->flag &= ~NODE_LINK_TEST;
     }
 
-    ntreeUpdateTree(CTX_data_main(C), snode.edittree);
-    snode_notify(*C, snode);
-    if (do_tag_update) {
-      snode_dag_update(*C, snode);
-    }
-
+    ED_node_tree_propagate_change(C, CTX_data_main(C), snode.edittree);
     return OPERATOR_FINISHED;
   }
 
@@ -1743,11 +1558,7 @@ static int detach_links_exec(bContext *C, wmOperator *UNUSED(op))
     }
   }
 
-  ntreeUpdateTree(CTX_data_main(C), &ntree);
-
-  snode_notify(*C, snode);
-  snode_dag_update(*C, snode);
-
+  ED_node_tree_propagate_change(C, CTX_data_main(C), &ntree);
   return OPERATOR_FINISHED;
 }
 
@@ -1773,14 +1584,14 @@ void NODE_OT_links_detach(wmOperatorType *ot)
 
 static int node_parent_set_exec(bContext *C, wmOperator *UNUSED(op))
 {
-  SpaceNode *snode = CTX_wm_space_node(C);
-  bNodeTree *ntree = snode->edittree;
-  bNode *frame = nodeGetActive(ntree);
+  SpaceNode &snode = *CTX_wm_space_node(C);
+  bNodeTree &ntree = *snode.edittree;
+  bNode *frame = nodeGetActive(&ntree);
   if (!frame || frame->type != NODE_FRAME) {
     return OPERATOR_CANCELLED;
   }
 
-  LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+  LISTBASE_FOREACH (bNode *, node, &ntree.nodes) {
     if (node == frame) {
       continue;
     }
@@ -1790,7 +1601,7 @@ static int node_parent_set_exec(bContext *C, wmOperator *UNUSED(op))
     }
   }
 
-  ED_node_sort(ntree);
+  node_sort(ntree);
   WM_event_add_notifier(C, NC_NODE | ND_DISPLAY, nullptr);
 
   return OPERATOR_FINISHED;
@@ -1887,7 +1698,7 @@ static int node_join_exec(bContext *C, wmOperator *UNUSED(op))
     }
   }
 
-  ED_node_sort(&ntree);
+  node_sort(ntree);
   WM_event_add_notifier(C, NC_NODE | ND_DISPLAY, nullptr);
 
   return OPERATOR_FINISHED;
@@ -1914,15 +1725,15 @@ void NODE_OT_join(wmOperatorType *ot)
 /** \name Attach Operator
  * \{ */
 
-static bNode *node_find_frame_to_attach(ARegion *region,
-                                        const bNodeTree *ntree,
+static bNode *node_find_frame_to_attach(ARegion &region,
+                                        const bNodeTree &ntree,
                                         const int mouse_xy[2])
 {
   /* convert mouse coordinates to v2d space */
   float cursor[2];
-  UI_view2d_region_to_view(&region->v2d, UNPACK2(mouse_xy), &cursor[0], &cursor[1]);
+  UI_view2d_region_to_view(&region.v2d, UNPACK2(mouse_xy), &cursor[0], &cursor[1]);
 
-  LISTBASE_FOREACH_BACKWARD (bNode *, frame, &ntree->nodes) {
+  LISTBASE_FOREACH_BACKWARD (bNode *, frame, &ntree.nodes) {
     /* skip selected, those are the nodes we want to attach */
     if ((frame->type != NODE_FRAME) || (frame->flag & NODE_SELECT)) {
       continue;
@@ -1937,13 +1748,13 @@ static bNode *node_find_frame_to_attach(ARegion *region,
 
 static int node_attach_invoke(bContext *C, wmOperator *UNUSED(op), const wmEvent *event)
 {
-  ARegion *region = CTX_wm_region(C);
-  SpaceNode *snode = CTX_wm_space_node(C);
-  bNodeTree *ntree = snode->edittree;
+  ARegion &region = *CTX_wm_region(C);
+  SpaceNode &snode = *CTX_wm_space_node(C);
+  bNodeTree &ntree = *snode.edittree;
   bNode *frame = node_find_frame_to_attach(region, ntree, event->mval);
 
   if (frame) {
-    LISTBASE_FOREACH_BACKWARD (bNode *, node, &ntree->nodes) {
+    LISTBASE_FOREACH_BACKWARD (bNode *, node, &ntree.nodes) {
       if (node->flag & NODE_SELECT) {
         if (node->parent == nullptr) {
           /* disallow moving a parent into its child */
@@ -1973,7 +1784,7 @@ static int node_attach_invoke(bContext *C, wmOperator *UNUSED(op), const wmEvent
     }
   }
 
-  ED_node_sort(ntree);
+  node_sort(ntree);
   WM_event_add_notifier(C, NC_NODE | ND_DISPLAY, nullptr);
 
   return OPERATOR_FINISHED;
@@ -2033,23 +1844,23 @@ static void node_detach_recursive(bNode *node)
 /* detach the root nodes in the current selection */
 static int node_detach_exec(bContext *C, wmOperator *UNUSED(op))
 {
-  SpaceNode *snode = CTX_wm_space_node(C);
-  bNodeTree *ntree = snode->edittree;
+  SpaceNode &snode = *CTX_wm_space_node(C);
+  bNodeTree &ntree = *snode.edittree;
 
   /* reset tags */
-  LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+  LISTBASE_FOREACH (bNode *, node, &ntree.nodes) {
     node->done = 0;
   }
   /* detach nodes recursively
    * relative order is preserved here!
    */
-  LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+  LISTBASE_FOREACH (bNode *, node, &ntree.nodes) {
     if (!(node->done & NODE_DETACH_DONE)) {
       node_detach_recursive(node);
     }
   }
 
-  ED_node_sort(ntree);
+  node_sort(ntree);
   WM_event_add_notifier(C, NC_NODE | ND_DISPLAY, nullptr);
 
   return OPERATOR_FINISHED;
@@ -2134,8 +1945,12 @@ static bool ed_node_link_conditions(ScrArea *area,
   return true;
 }
 
+}  // namespace blender::ed::space_node
+
 void ED_node_link_intersect_test(ScrArea *area, int test)
 {
+  using namespace blender::ed::space_node;
+
   bNode *select;
   SpaceNode *snode;
   if (!ed_node_link_conditions(area, test, &snode, &select)) {
@@ -2195,6 +2010,8 @@ void ED_node_link_intersect_test(ScrArea *area, int test)
   }
 }
 
+namespace blender::ed::space_node {
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -2234,20 +2051,17 @@ static int get_main_socket_priority(const bNodeSocket *socket)
 /** Get the "main" socket based on the node declaration or an heuristic. */
 static bNodeSocket *get_main_socket(bNodeTree &ntree, bNode &node, eNodeSocketInOut in_out)
 {
-  using namespace blender;
-  using namespace blender::nodes;
-
   ListBase *sockets = (in_out == SOCK_IN) ? &node.inputs : &node.outputs;
 
   /* Try to get the main socket based on the socket declaration. */
   nodeDeclarationEnsure(&ntree, &node);
-  const NodeDeclaration *node_decl = node.declaration;
+  const nodes::NodeDeclaration *node_decl = node.declaration;
   if (node_decl != nullptr) {
-    Span<SocketDeclarationPtr> socket_decls = (in_out == SOCK_IN) ? node_decl->inputs() :
-                                                                    node_decl->outputs();
+    Span<nodes::SocketDeclarationPtr> socket_decls = (in_out == SOCK_IN) ? node_decl->inputs() :
+                                                                           node_decl->outputs();
     int index;
     LISTBASE_FOREACH_INDEX (bNodeSocket *, socket, sockets, index) {
-      const SocketDeclaration &socket_decl = *socket_decls[index];
+      const nodes::SocketDeclaration &socket_decl = *socket_decls[index];
       if (nodeSocketIsHidden(socket)) {
         continue;
       }
@@ -2424,7 +2238,7 @@ static void node_link_insert_offset_ntree(NodeInsertOfsData *iofsd,
 
   /* frame attachment wasn't handled yet
    * so we search the frame that the node will be attached to later */
-  insert.parent = node_find_frame_to_attach(region, ntree, mouse_xy);
+  insert.parent = node_find_frame_to_attach(*region, *ntree, mouse_xy);
 
   /* this makes sure nodes are also correctly offset when inserting a node on top of a frame
    * without actually making it a part of the frame (because mouse isn't intersecting it)
@@ -2611,12 +2425,16 @@ void NODE_OT_insert_offset(wmOperatorType *ot)
 
 /** \} */
 
+}  // namespace blender::ed::space_node
+
 /* -------------------------------------------------------------------- */
 /** \name Note Link Insert
  * \{ */
 
 void ED_node_link_insert(Main *bmain, ScrArea *area)
 {
+  using namespace blender::ed::space_node;
+
   bNode *select;
   SpaceNode *snode;
   if (!ed_node_link_conditions(area, true, &snode, &select)) {
@@ -2653,8 +2471,7 @@ void ED_node_link_insert(Main *bmain, ScrArea *area)
 
       /* set up insert offset data, it needs stuff from here */
       if ((snode->flag & SNODE_SKIP_INSOFFSET) == 0) {
-        NodeInsertOfsData *iofsd = (NodeInsertOfsData *)MEM_callocN(sizeof(NodeInsertOfsData),
-                                                                    __func__);
+        NodeInsertOfsData *iofsd = MEM_cnew<NodeInsertOfsData>(__func__);
 
         iofsd->insert = select;
         iofsd->prev = link->fromnode;
@@ -2663,10 +2480,7 @@ void ED_node_link_insert(Main *bmain, ScrArea *area)
         snode->runtime->iofsd = iofsd;
       }
 
-      ntreeUpdateTree(bmain, snode->edittree); /* needed for pointers */
-      snode_update(*snode, select);
-      ED_node_tag_update_id((ID *)snode->edittree);
-      ED_node_tag_update_id(snode->id);
+      ED_node_tree_propagate_change(nullptr, bmain, snode->edittree);
     }
   }
 }

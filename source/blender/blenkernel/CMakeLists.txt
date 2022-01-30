@@ -126,7 +126,7 @@ set(SRC
   intern/curve_eval.cc
   intern/curve_to_mesh_convert.cc
   intern/curveprofile.cc
-  intern/customdata.c
+  intern/customdata.cc
   intern/customdata_file.c
   intern/data_transfer.c
   intern/deform.c
@@ -156,13 +156,16 @@ set(SRC
   intern/gpencil_curve.c
   intern/gpencil_geom.cc
   intern/gpencil_modifier.c
-  intern/hair.c
+  intern/hair.cc
   intern/icons.cc
   intern/icons_rasterize.c
   intern/idprop.c
+  intern/idprop_create.cc
+  intern/idprop_serialize.cc
   intern/idprop_utils.c
   intern/idtype.c
   intern/image.c
+  intern/image_partial_update.cc
   intern/image_gen.c
   intern/image_gpu.cc
   intern/image_save.c
@@ -177,6 +180,7 @@ set(SRC
   intern/lib_id.c
   intern/lib_id_delete.c
   intern/lib_id_eval.c
+  intern/lib_id_remapper.cc
   intern/lib_override.c
   intern/lib_query.c
   intern/lib_remap.c
@@ -195,6 +199,7 @@ set(SRC
   intern/mesh.cc
   intern/mesh_boolean_convert.cc
   intern/mesh_convert.cc
+  intern/mesh_debug.cc
   intern/mesh_evaluate.cc
   intern/mesh_fair.cc
   intern/mesh_iterators.c
@@ -226,7 +231,7 @@ set(SRC
   intern/multires_versioning.c
   intern/nla.c
   intern/node.cc
-  intern/type_conversions.cc
+  intern/node_tree_update.cc
   intern/object.cc
   intern/object_deform.c
   intern/object_dupli.cc
@@ -274,6 +279,7 @@ set(SRC
   intern/subdiv_eval.c
   intern/subdiv_foreach.c
   intern/subdiv_mesh.c
+  intern/subdiv_modifier.c
   intern/subdiv_stats.c
   intern/subdiv_topology.c
   intern/subsurf_ccg.c
@@ -288,6 +294,7 @@ set(SRC
   intern/tracking_solver.c
   intern/tracking_stabilize.c
   intern/tracking_util.c
+  intern/type_conversions.cc
   intern/undo_system.c
   intern/unit.c
   intern/vfont.c
@@ -379,6 +386,7 @@ set(SRC
   BKE_hair.h
   BKE_icons.h
   BKE_idprop.h
+  BKE_idprop.hh
   BKE_idtype.h
   BKE_image.h
   BKE_image_save.h
@@ -420,6 +428,7 @@ set(SRC
   BKE_multires.h
   BKE_nla.h
   BKE_node.h
+  BKE_node_tree_update.h
   BKE_object.h
   BKE_object_deform.h
   BKE_object_facemap.h
@@ -451,6 +460,7 @@ set(SRC
   BKE_subdiv_eval.h
   BKE_subdiv_foreach.h
   BKE_subdiv_mesh.h
+  BKE_subdiv_modifier.h
   BKE_subdiv_topology.h
   BKE_subsurf.h
   BKE_text.h
@@ -514,7 +524,7 @@ set(LIB
   bf_simulation
 
   # For `vfontdata_freetype.c`.
-  ${FREETYPE_LIBRARY}
+  ${FREETYPE_LIBRARIES} ${BROTLI_LIBRARIES}
 )
 
 if(WITH_BINRELOC)
@@ -709,10 +719,6 @@ if(WITH_FFTW3)
   add_definitions(-DFFTW3=1)
 endif()
 
-if(WITH_INTERNATIONAL)
-  add_definitions(-DWITH_INTERNATIONAL)
-endif()
-
 if(WITH_FREESTYLE)
   add_definitions(-DWITH_FREESTYLE)
 endif()
@@ -812,9 +818,13 @@ if(WITH_GTESTS)
     intern/bpath_test.cc
     intern/cryptomatte_test.cc
     intern/fcurve_test.cc
+    intern/idprop_serialize_test.cc
+    intern/image_partial_update_test.cc
     intern/lattice_deform_test.cc
     intern/layer_test.cc
+    intern/lib_id_remapper_test.cc
     intern/lib_id_test.cc
+    intern/lib_remap_test.cc
     intern/tracking_test.cc
   )
   set(TEST_INC

@@ -879,7 +879,7 @@ int wm_window_new_exec(bContext *C, wmOperator *op)
   ScrArea *area = BKE_screen_find_big_area(CTX_wm_screen(C), SPACE_TYPE_ANY, 0);
 
   bool ok = (WM_window_open(C,
-                            IFACE_("Blender"),
+                            "Blender",
                             0,
                             0,
                             win_src->sizex * 0.95f,
@@ -1033,7 +1033,9 @@ void wm_window_make_drawable(wmWindowManager *wm, wmWindow *win)
     }
 
     wm_window_set_drawable(wm, win, true);
+  }
 
+  if (win->ghostwin) {
     /* this can change per window */
     WM_window_set_dpi(win);
   }
