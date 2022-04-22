@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2005 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2005 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup gpu
@@ -70,6 +54,9 @@ GPUShader *GPU_shader_create_ex(const char *vertcode,
                                 const char *shname);
 GPUShader *GPU_shader_create_from_info(const GPUShaderCreateInfo *_info);
 GPUShader *GPU_shader_create_from_info_name(const char *info_name);
+
+const GPUShaderCreateInfo *GPU_shader_create_info_get(const char *info_name);
+bool GPU_shader_create_info_check_error(const GPUShaderCreateInfo *_info, char r_error[128]);
 
 struct GPU_ShaderCreateFromArray_Params {
   const char **vert, **geom, **frag, **defs;
@@ -377,17 +364,12 @@ typedef struct GPUShaderConfigData {
   const char *def;
 } GPUShaderConfigData;
 /* gpu_shader.c */
+
 extern const GPUShaderConfigData GPU_shader_cfg_data[GPU_SHADER_CFG_LEN];
 
 GPUShader *GPU_shader_get_builtin_shader_with_config(eGPUBuiltinShader shader,
                                                      eGPUShaderConfig sh_cfg);
 GPUShader *GPU_shader_get_builtin_shader(eGPUBuiltinShader shader);
-
-void GPU_shader_get_builtin_shader_code(eGPUBuiltinShader shader,
-                                        const char **r_vert,
-                                        const char **r_frag,
-                                        const char **r_geom,
-                                        const char **r_defines);
 
 void GPU_shader_free_builtin_shaders(void);
 

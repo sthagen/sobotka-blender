@@ -1,18 +1,5 @@
-/*
- * Copyright 2011-2014 Blender Foundation
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+/* SPDX-License-Identifier: Apache-2.0
+ * Copyright 2011-2022 Blender Foundation */
 
 #pragma once
 
@@ -202,10 +189,8 @@ ccl_device float svm_math(NodeMathType type, float a, float b, float c)
   }
 }
 
-ccl_device float3 svm_math_blackbody_color(float t)
+ccl_device float3 svm_math_blackbody_color_rec709(float t)
 {
-  /* TODO(lukas): Reimplement in XYZ. */
-
   /* Calculate color in range 800..12000 using an approximation
    * a/x+bx+c for R and G and ((at + b)t + c)t + d) for B
    * Max absolute error for RGB is (0.00095, 0.00077, 0.00057),

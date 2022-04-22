@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2018 by Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2018 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup bke
@@ -31,6 +15,7 @@
 #include "DNA_meshdata_types.h"
 
 #include "BLI_alloca.h"
+#include "BLI_bitmap.h"
 #include "BLI_math_vector.h"
 
 #include "BKE_customdata.h"
@@ -88,6 +73,9 @@ static void subdiv_mesh_ctx_cache_custom_data_layers(SubdivMeshContext *ctx)
 
 static void subdiv_mesh_prepare_accumulator(SubdivMeshContext *ctx, int num_vertices)
 {
+  if (!ctx->have_displacement) {
+    return;
+  }
   ctx->accumulated_counters = MEM_calloc_arrayN(
       num_vertices, sizeof(*ctx->accumulated_counters), "subdiv accumulated counters");
 }
@@ -428,8 +416,6 @@ static void subdiv_mesh_tls_free(void *tls_v)
 
 /** \} */
 
-/** \} */
-
 /* -------------------------------------------------------------------- */
 /** \name Accumulation helpers
  * \{ */
@@ -440,18 +426,17 @@ static void subdiv_accumulate_vertex_displacement(SubdivMeshContext *ctx,
                                                   const float v,
                                                   MVert *subdiv_vert)
 {
+  /* Accumulate displacement. */
   Subdiv *subdiv = ctx->subdiv;
   const int subdiv_vertex_index = subdiv_vert - ctx->subdiv_mesh->mvert;
   float dummy_P[3], dPdu[3], dPdv[3], D[3];
   BKE_subdiv_eval_limit_point_and_derivatives(subdiv, ptex_face_index, u, v, dummy_P, dPdu, dPdv);
 
-  /* Accumulate displacement if needed. */
-  if (ctx->have_displacement) {
-    /* NOTE: The subdivided mesh is allocated in this module, and its vertices are kept at zero
-     * locations as a default calloc(). */
-    BKE_subdiv_eval_displacement(subdiv, ptex_face_index, u, v, dPdu, dPdv, D);
-    add_v3_v3(subdiv_vert->co, D);
-  }
+  /* NOTE: The subdivided mesh is allocated in this module, and its vertices are kept at zero
+   * locations as a default calloc(). */
+  BKE_subdiv_eval_displacement(subdiv, ptex_face_index, u, v, dPdu, dPdv, D);
+  add_v3_v3(subdiv_vert->co, D);
+
   if (ctx->accumulated_counters) {
     ++ctx->accumulated_counters[subdiv_vertex_index];
   }
@@ -480,6 +465,9 @@ static bool subdiv_mesh_topology_info(const SubdivForeachContext *foreach_contex
       subdiv_context->coarse_mesh, num_vertices, num_edges, 0, num_loops, num_polygons, mask);
   subdiv_mesh_ctx_cache_custom_data_layers(subdiv_context);
   subdiv_mesh_prepare_accumulator(subdiv_context, num_vertices);
+  MEM_SAFE_FREE(subdiv_context->subdiv_mesh->runtime.subsurf_face_dot_tags);
+  subdiv_context->subdiv_mesh->runtime.subsurf_face_dot_tags = BLI_BITMAP_NEW(num_vertices,
+                                                                              __func__);
   return true;
 }
 
@@ -543,7 +531,7 @@ static void evaluate_vertex_and_apply_displacement_copy(const SubdivMeshContext 
   /* Apply displacement. */
   add_v3_v3(subdiv_vert->co, D);
   /* Remove facedot flag. This can happen if there is more than one subsurf modifier. */
-  subdiv_vert->flag &= ~ME_VERT_FACEDOT;
+  BLI_BITMAP_DISABLE(ctx->subdiv_mesh->runtime.subsurf_face_dot_tags, subdiv_vertex_index);
 }
 
 static void evaluate_vertex_and_apply_displacement_interpolate(
@@ -570,12 +558,13 @@ static void evaluate_vertex_and_apply_displacement_interpolate(
   add_v3_v3(subdiv_vert->co, D);
 }
 
-static void subdiv_mesh_vertex_every_corner_or_edge(const SubdivForeachContext *foreach_context,
-                                                    void *UNUSED(tls),
-                                                    const int ptex_face_index,
-                                                    const float u,
-                                                    const float v,
-                                                    const int subdiv_vertex_index)
+static void subdiv_mesh_vertex_displacement_every_corner_or_edge(
+    const SubdivForeachContext *foreach_context,
+    void *UNUSED(tls),
+    const int ptex_face_index,
+    const float u,
+    const float v,
+    const int subdiv_vertex_index)
 {
   SubdivMeshContext *ctx = foreach_context->user_data;
   Mesh *subdiv_mesh = ctx->subdiv_mesh;
@@ -584,31 +573,32 @@ static void subdiv_mesh_vertex_every_corner_or_edge(const SubdivForeachContext *
   subdiv_accumulate_vertex_displacement(ctx, ptex_face_index, u, v, subdiv_vert);
 }
 
-static void subdiv_mesh_vertex_every_corner(const SubdivForeachContext *foreach_context,
-                                            void *tls,
-                                            const int ptex_face_index,
-                                            const float u,
-                                            const float v,
-                                            const int UNUSED(coarse_vertex_index),
-                                            const int UNUSED(coarse_poly_index),
-                                            const int UNUSED(coarse_corner),
-                                            const int subdiv_vertex_index)
+static void subdiv_mesh_vertex_displacement_every_corner(
+    const SubdivForeachContext *foreach_context,
+    void *tls,
+    const int ptex_face_index,
+    const float u,
+    const float v,
+    const int UNUSED(coarse_vertex_index),
+    const int UNUSED(coarse_poly_index),
+    const int UNUSED(coarse_corner),
+    const int subdiv_vertex_index)
 {
-  subdiv_mesh_vertex_every_corner_or_edge(
+  subdiv_mesh_vertex_displacement_every_corner_or_edge(
       foreach_context, tls, ptex_face_index, u, v, subdiv_vertex_index);
 }
 
-static void subdiv_mesh_vertex_every_edge(const SubdivForeachContext *foreach_context,
-                                          void *tls,
-                                          const int ptex_face_index,
-                                          const float u,
-                                          const float v,
-                                          const int UNUSED(coarse_edge_index),
-                                          const int UNUSED(coarse_poly_index),
-                                          const int UNUSED(coarse_corner),
-                                          const int subdiv_vertex_index)
+static void subdiv_mesh_vertex_displacement_every_edge(const SubdivForeachContext *foreach_context,
+                                                       void *tls,
+                                                       const int ptex_face_index,
+                                                       const float u,
+                                                       const float v,
+                                                       const int UNUSED(coarse_edge_index),
+                                                       const int UNUSED(coarse_poly_index),
+                                                       const int UNUSED(coarse_corner),
+                                                       const int subdiv_vertex_index)
 {
-  subdiv_mesh_vertex_every_corner_or_edge(
+  subdiv_mesh_vertex_displacement_every_corner_or_edge(
       foreach_context, tls, ptex_face_index, u, v, subdiv_vertex_index);
 }
 
@@ -701,12 +691,13 @@ static bool subdiv_mesh_is_center_vertex(const MPoly *coarse_poly, const float u
 }
 
 static void subdiv_mesh_tag_center_vertex(const MPoly *coarse_poly,
-                                          MVert *subdiv_vert,
+                                          const int subdiv_vertex_index,
                                           const float u,
-                                          const float v)
+                                          const float v,
+                                          Mesh *subdiv_mesh)
 {
   if (subdiv_mesh_is_center_vertex(coarse_poly, u, v)) {
-    subdiv_vert->flag |= ME_VERT_FACEDOT;
+    BLI_BITMAP_ENABLE(subdiv_mesh->runtime.subsurf_face_dot_tags, subdiv_vertex_index);
   }
 }
 
@@ -731,7 +722,7 @@ static void subdiv_mesh_vertex_inner(const SubdivForeachContext *foreach_context
   subdiv_mesh_ensure_vertex_interpolation(ctx, tls, coarse_poly, coarse_corner);
   subdiv_vertex_data_interpolate(ctx, subdiv_vert, &tls->vertex_interpolation, u, v);
   BKE_subdiv_eval_final_point(subdiv, ptex_face_index, u, v, subdiv_vert->co);
-  subdiv_mesh_tag_center_vertex(coarse_poly, subdiv_vert, u, v);
+  subdiv_mesh_tag_center_vertex(coarse_poly, subdiv_vertex_index, u, v, subdiv_mesh);
 }
 
 /** \} */
@@ -767,6 +758,7 @@ static void subdiv_mesh_edge(const SubdivForeachContext *foreach_context,
                              void *UNUSED(tls),
                              const int coarse_edge_index,
                              const int subdiv_edge_index,
+                             const bool UNUSED(is_loose),
                              const int subdiv_v1,
                              const int subdiv_v2)
 {
@@ -941,11 +933,10 @@ static void subdiv_mesh_vertex_loose(const SubdivForeachContext *foreach_context
 /* Get neighbor edges of the given one.
  * - neighbors[0] is an edge adjacent to edge->v1.
  * - neighbors[1] is an edge adjacent to edge->v2. */
-static void find_edge_neighbors(const SubdivMeshContext *ctx,
+static void find_edge_neighbors(const Mesh *coarse_mesh,
                                 const MEdge *edge,
                                 const MEdge *neighbors[2])
 {
-  const Mesh *coarse_mesh = ctx->coarse_mesh;
   const MEdge *coarse_medge = coarse_mesh->medge;
   neighbors[0] = NULL;
   neighbors[1] = NULL;
@@ -975,12 +966,11 @@ static void find_edge_neighbors(const SubdivMeshContext *ctx,
   }
 }
 
-static void points_for_loose_edges_interpolation_get(SubdivMeshContext *ctx,
+static void points_for_loose_edges_interpolation_get(const Mesh *coarse_mesh,
                                                      const MEdge *coarse_edge,
                                                      const MEdge *neighbors[2],
                                                      float points_r[4][3])
 {
-  const Mesh *coarse_mesh = ctx->coarse_mesh;
   const MVert *coarse_mvert = coarse_mesh->mvert;
   /* Middle points corresponds to the edge. */
   copy_v3_v3(points_r[1], coarse_mvert[coarse_edge->v1].co);
@@ -1010,6 +1000,30 @@ static void points_for_loose_edges_interpolation_get(SubdivMeshContext *ctx,
   else {
     sub_v3_v3v3(points_r[3], points_r[2], points_r[1]);
     add_v3_v3(points_r[3], points_r[2]);
+  }
+}
+
+void BKE_subdiv_mesh_interpolate_position_on_edge(const Mesh *coarse_mesh,
+                                                  const MEdge *coarse_edge,
+                                                  const bool is_simple,
+                                                  const float u,
+                                                  float pos_r[3])
+{
+  if (is_simple) {
+    const MVert *coarse_mvert = coarse_mesh->mvert;
+    const MVert *vert_1 = &coarse_mvert[coarse_edge->v1];
+    const MVert *vert_2 = &coarse_mvert[coarse_edge->v2];
+    interp_v3_v3v3(pos_r, vert_1->co, vert_2->co, u);
+  }
+  else {
+    /* Find neighbors of the coarse edge. */
+    const MEdge *neighbors[2];
+    find_edge_neighbors(coarse_mesh, coarse_edge, neighbors);
+    float points[4][3];
+    points_for_loose_edges_interpolation_get(coarse_mesh, coarse_edge, neighbors, points);
+    float weights[4];
+    key_curve_position_weights(u, weights, KEY_BSPLINE);
+    interp_v3_v3v3v3v3(pos_r, points[0], points[1], points[2], points[3], weights);
   }
 }
 
@@ -1049,9 +1063,6 @@ static void subdiv_mesh_vertex_of_loose_edge(const struct SubdivForeachContext *
   Mesh *subdiv_mesh = ctx->subdiv_mesh;
   MVert *subdiv_mvert = subdiv_mesh->mvert;
   const bool is_simple = ctx->subdiv->settings.is_simple;
-  /* Find neighbors of the current loose edge. */
-  const MEdge *neighbors[2];
-  find_edge_neighbors(ctx, coarse_edge, neighbors);
   /* Interpolate custom data when not an end point.
    * This data has already been copied from the original vertex by #subdiv_mesh_vertex_loose. */
   if (!ELEM(u, 0.0, 1.0)) {
@@ -1059,19 +1070,8 @@ static void subdiv_mesh_vertex_of_loose_edge(const struct SubdivForeachContext *
   }
   /* Interpolate coordinate. */
   MVert *subdiv_vertex = &subdiv_mvert[subdiv_vertex_index];
-  if (is_simple) {
-    const MVert *coarse_mvert = coarse_mesh->mvert;
-    const MVert *vert_1 = &coarse_mvert[coarse_edge->v1];
-    const MVert *vert_2 = &coarse_mvert[coarse_edge->v2];
-    interp_v3_v3v3(subdiv_vertex->co, vert_1->co, vert_2->co, u);
-  }
-  else {
-    float points[4][3];
-    points_for_loose_edges_interpolation_get(ctx, coarse_edge, neighbors, points);
-    float weights[4];
-    key_curve_position_weights(u, weights, KEY_BSPLINE);
-    interp_v3_v3v3v3v3(subdiv_vertex->co, points[0], points[1], points[2], points[3], weights);
-  }
+  BKE_subdiv_mesh_interpolate_position_on_edge(
+      coarse_mesh, coarse_edge, is_simple, u, subdiv_vertex->co);
   /* Reset flags and such. */
   subdiv_vertex->flag = 0;
   /* TODO(sergey): This matches old behavior, but we can as well interpolate
@@ -1093,12 +1093,8 @@ static void setup_foreach_callbacks(const SubdivMeshContext *subdiv_context,
   foreach_context->topology_info = subdiv_mesh_topology_info;
   /* Every boundary geometry. Used for displacement averaging. */
   if (subdiv_context->have_displacement) {
-    foreach_context->vertex_every_corner = subdiv_mesh_vertex_every_corner;
-    foreach_context->vertex_every_edge = subdiv_mesh_vertex_every_edge;
-  }
-  else {
-    foreach_context->vertex_every_corner = subdiv_mesh_vertex_every_corner;
-    foreach_context->vertex_every_edge = subdiv_mesh_vertex_every_edge;
+    foreach_context->vertex_every_corner = subdiv_mesh_vertex_displacement_every_corner;
+    foreach_context->vertex_every_edge = subdiv_mesh_vertex_displacement_every_edge;
   }
   foreach_context->vertex_corner = subdiv_mesh_vertex_corner;
   foreach_context->vertex_edge = subdiv_mesh_vertex_edge;
@@ -1159,7 +1155,7 @@ Mesh *BKE_subdiv_to_mesh(Subdiv *subdiv,
    * calculation. Since vertex normals are supposed to be a consistent cache, don't bother
    * calculating them here. The work may have been pointless anyway if the mesh is deformed or
    * changed afterwards. */
-  BKE_mesh_normals_tag_dirty(result);
+  BLI_assert(BKE_mesh_vertex_normals_are_dirty(result) || BKE_mesh_poly_normals_are_dirty(result));
   /* Free used memory. */
   subdiv_mesh_context_free(&subdiv_context);
   return result;

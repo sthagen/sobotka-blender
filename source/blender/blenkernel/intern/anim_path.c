@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup bke
@@ -71,7 +55,7 @@ float BKE_anim_path_get_length(const CurveCache *curve_cache)
 
 void BKE_anim_path_calc_data(Object *ob)
 {
-  if (ob == NULL || ob->type != OB_CURVE) {
+  if (ob == NULL || ob->type != OB_CURVES_LEGACY) {
     return;
   }
   if (ob->runtime.curve_cache == NULL) {
@@ -238,7 +222,7 @@ bool BKE_where_on_path(const Object *ob,
                        float *r_radius,
                        float *r_weight)
 {
-  if (ob == NULL || ob->type != OB_CURVE) {
+  if (ob == NULL || ob->type != OB_CURVES_LEGACY) {
     return false;
   }
   Curve *cu = ob->data;
@@ -311,10 +295,12 @@ bool BKE_where_on_path(const Object *ob,
 
   key_curve_tangent_weights(frac, w, KEY_BSPLINE);
 
-  interp_v3_v3v3v3v3(r_dir, p0->vec, p1->vec, p2->vec, p3->vec, w);
+  if (r_dir) {
+    interp_v3_v3v3v3v3(r_dir, p0->vec, p1->vec, p2->vec, p3->vec, w);
 
-  /* Make compatible with #vec_to_quat. */
-  negate_v3(r_dir);
+    /* Make compatible with #vec_to_quat. */
+    negate_v3(r_dir);
+  }
   //}
 
   const ListBase *nurbs = BKE_curve_editNurbs_get(cu);

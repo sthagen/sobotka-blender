@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -20,7 +6,7 @@
 
 #include "BLI_math_base_safe.h"
 #include "BLI_math_rotation.h"
-#include "BLI_math_vec_types.hh"
+#include "BLI_math_vector.hh"
 #include "BLI_string_ref.hh"
 
 namespace blender::nodes {
@@ -42,15 +28,15 @@ const FloatMathOperationInfo *get_float_compare_operation_info(int operation);
 
 /**
  * This calls the `callback` with two arguments:
- *  1. The math function that takes a float as input and outputs a new float.
- *  2. A #FloatMathOperationInfo struct reference.
+ * 1. The math function that takes a float as input and outputs a new float.
+ * 2. A #FloatMathOperationInfo struct reference.
  * Returns true when the callback has been called, otherwise false.
  *
  * The math function that is passed to the callback is actually a lambda function that is different
  * for every operation. Therefore, if the callback is templated on the math function, it will get
  * instantiated for every operation separately. This has two benefits:
- *  - The compiler can optimize the callback for every operation separately.
- *  - A static variable declared in the callback will be generated for every operation separately.
+ * - The compiler can optimize the callback for every operation separately.
+ * - A static variable declared in the callback will be generated for every operation separately.
  *
  * If separate instantiations are not desired, the callback can also take a function pointer with
  * the following signature as input instead: float (*math_function)(float a).

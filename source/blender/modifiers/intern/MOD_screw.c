@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2005 by the Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2005 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup modifiers
@@ -47,6 +31,7 @@
 #include "UI_resources.h"
 
 #include "RNA_access.h"
+#include "RNA_prototypes.h"
 
 #include "DEG_depsgraph_build.h"
 #include "DEG_depsgraph_query.h"
@@ -399,7 +384,6 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *
 
   mvert_new = result->mvert;
   float(*vert_normals_new)[3] = BKE_mesh_vertex_normals_for_write(result);
-  BKE_mesh_vertex_normals_clear_dirty(result);
   mpoly_new = result->mpoly;
   mloop_new = result->mloop;
   medge_new = result->medge;
@@ -530,7 +514,7 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *
       mv_new = mvert_new;
 
       if (ob_axis != NULL) {
-        /*mtx_tx is initialized early on */
+        /* `mtx_tx` is initialized early on. */
         for (i = 0; i < totvert; i++, mv_new++, mv_orig++, vc++) {
           vc->co[0] = mv_new->co[0] = mv_orig->co[0];
           vc->co[1] = mv_new->co[1] = mv_orig->co[1];
@@ -898,7 +882,7 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *
       copy_v3_v3(mv_new->co, mv_new_base->co);
 
       /* only need to set these if using non cleared memory */
-      /*mv_new->mat_nr = mv_new->flag = 0;*/
+      // mv_new->mat_nr = mv_new->flag = 0;
 
       if (ob_axis != NULL) {
         sub_v3_v3(mv_new->co, mtx_tx[3]);
@@ -1135,7 +1119,6 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *
   }
 
   if ((ltmd->flag & MOD_SCREW_MERGE) && (screw_ofs == 0.0f)) {
-    Mesh *result_prev = result;
     result = mesh_remove_doubles_on_axis(result,
                                          mvert_new,
                                          totvert,
@@ -1143,13 +1126,10 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *
                                          axis_vec,
                                          ob_axis != NULL ? mtx_tx[3] : NULL,
                                          ltmd->merge_dist);
-    if (result != result_prev) {
-      BKE_mesh_normals_tag_dirty(result);
-    }
   }
 
-  if ((ltmd->flag & MOD_SCREW_NORMAL_CALC) == 0) {
-    BKE_mesh_normals_tag_dirty(result);
+  if ((ltmd->flag & MOD_SCREW_NORMAL_CALC)) {
+    BKE_mesh_vertex_normals_clear_dirty(mesh);
   }
 
   return result;

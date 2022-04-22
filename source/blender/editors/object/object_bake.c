@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2004 by Blender Foundation
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2004 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup edobj
@@ -375,7 +359,12 @@ static int multiresbake_image_exec_locked(bContext *C, wmOperator *op)
     /* copy data stored in job descriptor */
     bkr.scene = scene;
     bkr.bake_margin = scene->r.bake_margin;
-    bkr.bake_margin_type = scene->r.bake_margin_type;
+    if (scene->r.bake_mode == RE_BAKE_NORMALS) {
+      bkr.bake_margin_type = R_BAKE_EXTEND;
+    }
+    else {
+      bkr.bake_margin_type = scene->r.bake_margin_type;
+    }
     bkr.mode = scene->r.bake_mode;
     bkr.use_lores_mesh = scene->r.bake_flag & R_BAKE_LORES_MESH;
     bkr.bias = scene->r.bake_biasdist;
@@ -420,7 +409,12 @@ static void init_multiresbake_job(bContext *C, MultiresBakeJob *bkj)
   /* backup scene settings, so their changing in UI would take no effect on baker */
   bkj->scene = scene;
   bkj->bake_margin = scene->r.bake_margin;
-  bkj->bake_margin_type = scene->r.bake_margin_type;
+  if (scene->r.bake_mode == RE_BAKE_NORMALS) {
+    bkj->bake_margin_type = R_BAKE_EXTEND;
+  }
+  else {
+    bkj->bake_margin_type = scene->r.bake_margin_type;
+  }
   bkj->mode = scene->r.bake_mode;
   bkj->use_lores_mesh = scene->r.bake_flag & R_BAKE_LORES_MESH;
   bkj->bake_clear = scene->r.bake_flag & R_BAKE_CLEAR;
@@ -531,7 +525,7 @@ static void multiresbake_freejob(void *bkv)
     /* delete here, since this delete will be called from main thread */
     for (link = data->images.first; link; link = link->next) {
       Image *ima = (Image *)link->data;
-      BKE_image_free_gputextures(ima);
+      BKE_image_partial_update_mark_full_update(ima);
     }
 
     MEM_freeN(data->ob_image.array);
@@ -587,7 +581,7 @@ static int multiresbake_image_exec(bContext *C, wmOperator *op)
 
 /* ****************** render BAKING ********************** */
 
-/* catch esc */
+/** Catch escape key to cancel. */
 static int objects_bake_render_modal(bContext *C, wmOperator *UNUSED(op), const wmEvent *event)
 {
   /* no running blender, remove handler and pass through */

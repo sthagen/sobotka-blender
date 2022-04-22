@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup spseq
@@ -56,6 +40,7 @@
 
 #include "RNA_define.h"
 #include "RNA_enum_types.h"
+#include "RNA_prototypes.h"
 
 #include "SEQ_add.h"
 #include "SEQ_effects.h"
@@ -632,11 +617,12 @@ static void sequencer_add_movie_clamp_sound_strip_length(Scene *scene,
                                                          Sequence *seq_movie,
                                                          Sequence *seq_sound)
 {
-  if (ELEM(NULL, seq_movie, seq_sound) || seq_sound->len <= seq_movie->len) {
+  if (ELEM(NULL, seq_movie, seq_sound)) {
     return;
   }
 
   SEQ_transform_set_right_handle_frame(seq_sound, SEQ_transform_get_right_handle_frame(seq_movie));
+  SEQ_transform_set_left_handle_frame(seq_sound, SEQ_transform_get_left_handle_frame(seq_movie));
   SEQ_time_update_sequence(scene, seqbase, seq_sound);
 }
 
@@ -658,52 +644,20 @@ static void sequencer_add_movie_multiple_strips(bContext *C,
     BLI_strncpy(load_data->name, file_only, sizeof(load_data->name));
     Sequence *seq_movie = NULL;
     Sequence *seq_sound = NULL;
-    double video_start_offset = -1;
-    double audio_start_offset = 0;
-
-    if (RNA_boolean_get(op->ptr, "sound")) {
-      SoundStreamInfo sound_info;
-      if (BKE_sound_stream_info_get(bmain, load_data->path, 0, &sound_info)) {
-        audio_start_offset = video_start_offset = sound_info.start;
-      }
-    }
 
     load_data->channel++;
-    seq_movie = SEQ_add_movie_strip(bmain, scene, ed->seqbasep, load_data, &video_start_offset);
+    seq_movie = SEQ_add_movie_strip(bmain, scene, ed->seqbasep, load_data);
     load_data->channel--;
     if (seq_movie == NULL) {
       BKE_reportf(op->reports, RPT_ERROR, "File '%s' could not be loaded", load_data->path);
     }
     else {
       if (RNA_boolean_get(op->ptr, "sound")) {
-        int minimum_frame_offset = MIN2(video_start_offset, audio_start_offset) * FPS;
-
-        int video_frame_offset = video_start_offset * FPS;
-        int audio_frame_offset = audio_start_offset * FPS;
-
-        double video_frame_remainder = video_start_offset * FPS - video_frame_offset;
-        double audio_frame_remainder = audio_start_offset * FPS - audio_frame_offset;
-
-        double audio_skip = (video_frame_remainder - audio_frame_remainder) / FPS;
-
-        video_frame_offset -= minimum_frame_offset;
-        audio_frame_offset -= minimum_frame_offset;
-
-        load_data->start_frame += audio_frame_offset;
-        seq_sound = SEQ_add_sound_strip(bmain, scene, ed->seqbasep, load_data, audio_skip);
-
-        int min_startdisp = 0, max_enddisp = 0;
-        if (seq_sound != NULL) {
-          min_startdisp = MIN2(seq_movie->startdisp, seq_sound->startdisp);
-          max_enddisp = MAX2(seq_movie->enddisp, seq_sound->enddisp);
-        }
-
-        load_data->start_frame += max_enddisp - min_startdisp - audio_frame_offset;
+        seq_sound = SEQ_add_sound_strip(bmain, scene, ed->seqbasep, load_data);
+        sequencer_add_movie_clamp_sound_strip_length(scene, ed->seqbasep, seq_movie, seq_sound);
       }
-      else {
-        load_data->start_frame += seq_movie->enddisp - seq_movie->startdisp;
-      }
-      sequencer_add_movie_clamp_sound_strip_length(scene, ed->seqbasep, seq_movie, seq_sound);
+
+      load_data->start_frame += seq_movie->enddisp - seq_movie->startdisp;
       seq_load_apply_generic_options(C, op, seq_sound);
       seq_load_apply_generic_options(C, op, seq_movie);
       SEQ_collection_append_strip(seq_movie, r_movie_strips);
@@ -723,18 +677,9 @@ static bool sequencer_add_movie_single_strip(bContext *C,
 
   Sequence *seq_movie = NULL;
   Sequence *seq_sound = NULL;
-  double video_start_offset = -1;
-  double audio_start_offset = 0;
-
-  if (RNA_boolean_get(op->ptr, "sound")) {
-    SoundStreamInfo sound_info;
-    if (BKE_sound_stream_info_get(bmain, load_data->path, 0, &sound_info)) {
-      audio_start_offset = video_start_offset = sound_info.start;
-    }
-  }
 
   load_data->channel++;
-  seq_movie = SEQ_add_movie_strip(bmain, scene, ed->seqbasep, load_data, &video_start_offset);
+  seq_movie = SEQ_add_movie_strip(bmain, scene, ed->seqbasep, load_data);
   load_data->channel--;
 
   if (seq_movie == NULL) {
@@ -742,23 +687,9 @@ static bool sequencer_add_movie_single_strip(bContext *C,
     return false;
   }
   if (RNA_boolean_get(op->ptr, "sound")) {
-    int minimum_frame_offset = MIN2(video_start_offset, audio_start_offset) * FPS;
-
-    int video_frame_offset = video_start_offset * FPS;
-    int audio_frame_offset = audio_start_offset * FPS;
-
-    double video_frame_remainder = video_start_offset * FPS - video_frame_offset;
-    double audio_frame_remainder = audio_start_offset * FPS - audio_frame_offset;
-
-    double audio_skip = (video_frame_remainder - audio_frame_remainder) / FPS;
-
-    video_frame_offset -= minimum_frame_offset;
-    audio_frame_offset -= minimum_frame_offset;
-
-    load_data->start_frame += audio_frame_offset;
-    seq_sound = SEQ_add_sound_strip(bmain, scene, ed->seqbasep, load_data, audio_skip);
+    seq_sound = SEQ_add_sound_strip(bmain, scene, ed->seqbasep, load_data);
+    sequencer_add_movie_clamp_sound_strip_length(scene, ed->seqbasep, seq_movie, seq_sound);
   }
-  sequencer_add_movie_clamp_sound_strip_length(scene, ed->seqbasep, seq_movie, seq_sound);
   seq_load_apply_generic_options(C, op, seq_sound);
   seq_load_apply_generic_options(C, op, seq_movie);
   SEQ_collection_append_strip(seq_movie, r_movie_strips);
@@ -793,14 +724,14 @@ static int sequencer_add_movie_strip_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  /* Free custom data. */
-  sequencer_add_cancel(C, op);
-  SEQ_collection_free(movie_strips);
-
   seq_build_proxy(C, movie_strips);
   DEG_relations_tag_update(bmain);
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
   WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+
+  /* Free custom data. */
+  sequencer_add_cancel(C, op);
+  SEQ_collection_free(movie_strips);
 
   return OPERATOR_FINISHED;
 }
@@ -817,7 +748,8 @@ static int sequencer_add_movie_strip_invoke(bContext *C,
   RNA_enum_set(op->ptr, "fit_method", SEQ_tool_settings_fit_method_get(scene));
 
   /* This is for drag and drop. */
-  if ((RNA_struct_property_is_set(op->ptr, "files") && RNA_collection_length(op->ptr, "files")) ||
+  if ((RNA_struct_property_is_set(op->ptr, "files") &&
+       !RNA_collection_is_empty(op->ptr, "files")) ||
       RNA_struct_property_is_set(op->ptr, "filepath")) {
     sequencer_generic_invoke_xy__internal(C, op, SEQPROP_NOPATHS, SEQ_TYPE_MOVIE);
     return sequencer_add_movie_strip_exec(C, op);
@@ -905,7 +837,7 @@ static void sequencer_add_sound_multiple_strips(bContext *C,
     RNA_string_get(&itemptr, "name", file_only);
     BLI_join_dirfile(load_data->path, sizeof(load_data->path), dir_only, file_only);
     BLI_strncpy(load_data->name, file_only, sizeof(load_data->name));
-    Sequence *seq = SEQ_add_sound_strip(bmain, scene, ed->seqbasep, load_data, 0.0f);
+    Sequence *seq = SEQ_add_sound_strip(bmain, scene, ed->seqbasep, load_data);
     if (seq == NULL) {
       BKE_reportf(op->reports, RPT_ERROR, "File '%s' could not be loaded", load_data->path);
     }
@@ -923,7 +855,7 @@ static bool sequencer_add_sound_single_strip(bContext *C, wmOperator *op, SeqLoa
   Scene *scene = CTX_data_scene(C);
   Editing *ed = SEQ_editing_ensure(scene);
 
-  Sequence *seq = SEQ_add_sound_strip(bmain, scene, ed->seqbasep, load_data, 0.0f);
+  Sequence *seq = SEQ_add_sound_strip(bmain, scene, ed->seqbasep, load_data);
   if (seq == NULL) {
     BKE_reportf(op->reports, RPT_ERROR, "File '%s' could not be loaded", load_data->path);
     return false;
@@ -971,7 +903,8 @@ static int sequencer_add_sound_strip_invoke(bContext *C,
                                             const wmEvent *UNUSED(event))
 {
   /* This is for drag and drop. */
-  if ((RNA_struct_property_is_set(op->ptr, "files") && RNA_collection_length(op->ptr, "files")) ||
+  if ((RNA_struct_property_is_set(op->ptr, "files") &&
+       !RNA_collection_is_empty(op->ptr, "files")) ||
       RNA_struct_property_is_set(op->ptr, "filepath")) {
     sequencer_generic_invoke_xy__internal(C, op, SEQPROP_NOPATHS, SEQ_TYPE_SOUND_RAM);
     return sequencer_add_sound_strip_exec(C, op);
@@ -1164,7 +1097,7 @@ static int sequencer_add_image_strip_invoke(bContext *C,
   RNA_enum_set(op->ptr, "fit_method", SEQ_tool_settings_fit_method_get(scene));
 
   /* Name set already by drag and drop. */
-  if (RNA_struct_property_is_set(op->ptr, "files") && RNA_collection_length(op->ptr, "files")) {
+  if (RNA_struct_property_is_set(op->ptr, "files") && !RNA_collection_is_empty(op->ptr, "files")) {
     sequencer_generic_invoke_xy__internal(
         C, op, SEQPROP_ENDFRAME | SEQPROP_NOPATHS, SEQ_TYPE_IMAGE);
     return sequencer_add_image_strip_exec(C, op);

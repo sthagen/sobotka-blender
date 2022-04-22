@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2009 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2009 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup edinterface
@@ -38,10 +22,12 @@
 #include "BLI_string.h"
 
 #include "BKE_context.h"
+#include "BKE_lib_id.h"
 #include "BKE_screen.h"
 #include "BKE_unit.h"
 
 #include "RNA_access.h"
+#include "RNA_prototypes.h"
 
 #include "UI_interface.h"
 
@@ -103,7 +89,8 @@ static int depthdropper_init(bContext *C, wmOperator *op)
     RegionView3D *rv3d = CTX_wm_region_view3d(C);
     if (rv3d && rv3d->persp == RV3D_CAMOB) {
       View3D *v3d = CTX_wm_view3d(C);
-      if (v3d->camera && v3d->camera->data && !ID_IS_LINKED(v3d->camera->data)) {
+      if (v3d->camera && v3d->camera->data &&
+          BKE_id_is_editable(CTX_data_main(C), v3d->camera->data)) {
         Camera *camera = (Camera *)v3d->camera->data;
         RNA_pointer_create(&camera->id, &RNA_CameraDOFSettings, &camera->dof, &ddr->ptr);
         ddr->prop = RNA_struct_find_property(&ddr->ptr, "focus_distance");
@@ -363,7 +350,8 @@ static bool depthdropper_poll(bContext *C)
     RegionView3D *rv3d = CTX_wm_region_view3d(C);
     if (rv3d && rv3d->persp == RV3D_CAMOB) {
       View3D *v3d = CTX_wm_view3d(C);
-      if (v3d->camera && v3d->camera->data && !ID_IS_LINKED(v3d->camera->data)) {
+      if (v3d->camera && v3d->camera->data &&
+          BKE_id_is_editable(CTX_data_main(C), v3d->camera->data)) {
         return true;
       }
     }

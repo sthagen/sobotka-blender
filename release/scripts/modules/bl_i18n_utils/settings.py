@@ -1,20 +1,4 @@
-# ***** BEGIN GPL LICENSE BLOCK *****
-#
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software Foundation,
-# Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
-#
-# ***** END GPL LICENSE BLOCK *****
+# SPDX-License-Identifier: GPL-2.0-or-later
 
 # <pep8 compliant>
 
@@ -208,6 +192,8 @@ PYGETTEXT_CONTEXTS_DEFSRC = os.path.join("source", "blender", "blentranslation",
 # XXX Not full-proof, but should be enough here!
 PYGETTEXT_CONTEXTS = "#define\\s+(BLT_I18NCONTEXT_[A-Z_0-9]+)\\s+\"([^\"]*)\""
 
+# autopep8: off
+
 # Keywords' regex.
 # XXX Most unfortunately, we can't use named backreferences inside character sets,
 #     which makes the regexes even more twisty... :/
@@ -271,6 +257,9 @@ PYGETTEXT_KEYWORDS = (() +
            r"\s*,\s*)?(?:".join(_ctxt_re_gen(i) for i in range(PYGETTEXT_MAX_MULTI_CTXT)) + r")?\s*\)").format(it)
           for it in ("BLT_I18N_MSGID_MULTI_CTXT",))
 )
+
+# autopep8: on
+
 
 # Check printf mismatches between msgid and msgstr.
 CHECK_PRINTF_FORMAT = (
@@ -356,6 +345,10 @@ WARN_MSGID_NOT_CAPITALIZED_ALLOWED = {
     "y",
     "y = (Ax + B)",
     # Sub-strings.
+    "all",
+    "all and invert unselected",
+    "and AMD Radeon Pro 21.Q4 driver or newer",
+    "and NVIDIA driver version 470 or newer",
     "available with",
     "brown fox",
     "can't save image while rendering",
@@ -373,26 +366,34 @@ WARN_MSGID_NOT_CAPITALIZED_ALLOWED = {
     "face data",
     "gimbal",
     "global",
+    "glTF Settings",
     "image file not found",
     "image format is read-only",
     "image path can't be written to",
     "in memory to enable editing!",
     "insufficient content",
+    "into",
     "jumps over",
     "left",
     "local",
     "multi-res modifier",
     "non-triangle face",
     "normal",
+    "or AMD with macOS 12.3 or newer",
     "performance impact!",
     "right",
+    "selected",
+    "selected and lock unselected",
+    "selected and unlock unselected",
     "the lazy dog",
+    "to the top level of the tree",
     "unable to load movie clip",
     "unable to load text",
     "unable to open the file",
     "unknown error reading file",
     "unknown error stating file",
     "unknown error writing file",
+    "unselected",
     "unsupported font format",
     "unsupported format",
     "unsupported image format",
@@ -609,7 +610,10 @@ class I18nSettings:
     def to_json(self):
         # Only save the diff from default i18n_settings!
         glob = globals()
-        export_dict = {uid: val for uid, val in self.__dict__.items() if _check_valid_data(uid, val) and glob.get(uid) != val}
+        export_dict = {
+            uid: val for uid, val in self.__dict__.items()
+            if _check_valid_data(uid, val) and glob.get(uid) != val
+        }
         return json.dumps(export_dict)
 
     def load(self, fname, reset=False):

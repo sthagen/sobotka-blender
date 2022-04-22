@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_disjoint_set.hh"
 #include "BLI_task.hh"
@@ -39,7 +25,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Geometry>("Mesh").supported_type(GEO_COMPONENT_TYPE_MESH);
   b.add_input<decl::Bool>(N_("Selection")).default_value(true).supports_field().hide_value();
   b.add_input<decl::Vector>(N_("Offset")).subtype(PROP_TRANSLATION).implicit_field().hide_value();
-  b.add_input<decl::Float>(N_("Offset Scale")).default_value(1.0f).min(0.0f).supports_field();
+  b.add_input<decl::Float>(N_("Offset Scale")).default_value(1.0f).supports_field();
   b.add_input<decl::Bool>(N_("Individual")).default_value(true);
   b.add_output<decl::Geometry>("Mesh");
   b.add_output<decl::Bool>(N_("Top")).field_source();
@@ -316,7 +302,6 @@ static void extrude_mesh_vertices(MeshComponent &component,
   }
 
   BKE_mesh_runtime_clear_cache(&mesh);
-  BKE_mesh_normals_tag_dirty(&mesh);
 }
 
 static Array<Vector<int, 2>> mesh_calculate_polys_of_edge(const Mesh &mesh)
@@ -538,7 +523,7 @@ static void extrude_mesh_edges(MeshComponent &component,
         }
         case ATTR_DOMAIN_FACE: {
           /* Attribute values for new faces are a mix of the values of faces connected to the its
-           * original edge.  */
+           * original edge. */
           copy_with_mixing(data.slice(new_poly_range), data.as_span(), [&](const int i) {
             return edge_to_poly_map[edge_selection[i]].as_span();
           });
@@ -640,7 +625,6 @@ static void extrude_mesh_edges(MeshComponent &component,
   }
 
   BKE_mesh_runtime_clear_cache(&mesh);
-  BKE_mesh_normals_tag_dirty(&mesh);
 }
 
 /**
@@ -1009,7 +993,6 @@ static void extrude_mesh_face_regions(MeshComponent &component,
   }
 
   BKE_mesh_runtime_clear_cache(&mesh);
-  BKE_mesh_normals_tag_dirty(&mesh);
 }
 
 /* Get the range into an array of extruded corners, edges, or vertices for a particular polygon. */
@@ -1277,7 +1260,6 @@ static void extrude_individual_mesh_faces(MeshComponent &component,
   }
 
   BKE_mesh_runtime_clear_cache(&mesh);
-  BKE_mesh_normals_tag_dirty(&mesh);
 }
 
 static void node_geo_exec(GeoNodeExecParams params)

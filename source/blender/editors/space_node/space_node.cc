@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2008 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2008 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup spnode
@@ -46,6 +30,7 @@
 #include "RNA_access.h"
 #include "RNA_define.h"
 #include "RNA_enum_types.h"
+#include "RNA_prototypes.h"
 
 #include "WM_api.h"
 #include "WM_types.h"
@@ -637,11 +622,6 @@ static bool node_collection_drop_poll(bContext *UNUSED(C),
   return WM_drag_is_ID_type(drag, ID_GR);
 }
 
-static bool node_texture_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent *UNUSED(event))
-{
-  return WM_drag_is_ID_type(drag, ID_TE);
-}
-
 static bool node_ima_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent *UNUSED(event))
 {
   if (drag->type == WM_DRAG_PATH) {
@@ -698,12 +678,6 @@ static void node_dropboxes()
   WM_dropbox_add(lb,
                  "NODE_OT_add_collection",
                  node_collection_drop_poll,
-                 node_id_drop_copy,
-                 WM_drag_free_imported_drag_ID,
-                 nullptr);
-  WM_dropbox_add(lb,
-                 "NODE_OT_add_texture",
-                 node_texture_drop_poll,
                  node_id_drop_copy,
                  WM_drag_free_imported_drag_ID,
                  nullptr);

@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup bke
@@ -42,7 +26,7 @@
 #include "BLI_linklist.h"
 #include "BLI_listbase.h"
 #include "BLI_math.h"
-#include "BLI_math_vec_types.hh"
+#include "BLI_math_vector.hh"
 #include "BLI_memarena.h"
 #include "BLI_string.h"
 #include "BLI_task.hh"
@@ -74,6 +58,8 @@
 #include "DEG_depsgraph_query.h"
 
 #include "BLO_read_write.h"
+
+using blender::float3;
 
 static void mesh_clear_geometry(Mesh *mesh);
 static void mesh_tessface_clear_intern(Mesh *mesh, int free_customdata);
@@ -156,11 +142,11 @@ static void mesh_copy_data(Main *bmain, ID *id_dst, const ID *id_src, const int 
 
   mesh_dst->mselect = (MSelect *)MEM_dupallocN(mesh_dst->mselect);
 
-  /* Set normal layers dirty, since they aren't included in CD_MASK_MESH and are therefore not
-   * copied to the destination mesh. Alternatively normal layers could be copied if they aren't
-   * dirty, avoiding recomputation in some cases. However, a copied mesh is often changed anyway,
-   * so that idea is not clearly better. With proper reference counting, all custom data layers
-   * could be copied as the cost would be much lower. */
+  /* Set normal layers dirty. They should be dirty by default on new meshes anyway, but being
+   * explicit about it is safer. Alternatively normal layers could be copied if they aren't dirty,
+   * avoiding recomputation in some cases. However, a copied mesh is often changed anyway, so that
+   * idea is not clearly better. With proper reference counting, all custom data layers could be
+   * copied as the cost would be much lower. */
   BKE_mesh_normals_tag_dirty(mesh_dst);
 
   /* TODO: Do we want to add flag to prevent this? */
@@ -213,7 +199,7 @@ static void mesh_foreach_path(ID *id, BPathForeachPathData *bpath_data)
 {
   Mesh *me = (Mesh *)id;
   if (me->ldata.external) {
-    BKE_bpath_foreach_path_fixed_process(bpath_data, me->ldata.external->filename);
+    BKE_bpath_foreach_path_fixed_process(bpath_data, me->ldata.external->filepath);
   }
 }
 
@@ -232,7 +218,7 @@ static void mesh_blend_write(BlendWriter *writer, ID *id, const void *id_address
   mesh->mface = nullptr;
   mesh->totface = 0;
   memset(&mesh->fdata, 0, sizeof(mesh->fdata));
-  memset(&mesh->runtime, 0, sizeof(mesh->runtime));
+  mesh->runtime = blender::dna::shallow_zero_initialize();
   flayers = flayers_buff;
 
   /* Do not store actual geometry data in case this is a library override ID. */
@@ -343,7 +329,7 @@ static void mesh_blend_read_data(BlendDataReader *reader, ID *id)
   mesh->texflag &= ~ME_AUTOSPACE_EVALUATED;
   mesh->edit_mesh = nullptr;
 
-  memset(&mesh->runtime, 0, sizeof(mesh->runtime));
+  mesh->runtime = blender::dna::shallow_zero_initialize();
   BKE_mesh_runtime_init_data(mesh);
 
   /* happens with old files */
@@ -447,7 +433,7 @@ static const char *cmpcode_to_str(int code)
     case MESHCMP_DVERT_TOTGROUPMISMATCH:
       return "Vertex Doesn't Belong To Same Number Of Groups";
     case MESHCMP_LOOPCOLMISMATCH:
-      return "Vertex Color Mismatch";
+      return "Color Attribute Mismatch";
     case MESHCMP_LOOPUVMISMATCH:
       return "UV Mismatch";
     case MESHCMP_LOOPMISMATCH:
@@ -477,7 +463,8 @@ static int customdata_compare(
   CustomDataLayer *l1, *l2;
   int layer_count1 = 0, layer_count2 = 0, j;
   const uint64_t cd_mask_non_generic = CD_MASK_MVERT | CD_MASK_MEDGE | CD_MASK_MPOLY |
-                                       CD_MASK_MLOOPUV | CD_MASK_MLOOPCOL | CD_MASK_MDEFORMVERT;
+                                       CD_MASK_MLOOPUV | CD_MASK_PROP_BYTE_COLOR |
+                                       CD_MASK_MDEFORMVERT;
   const uint64_t cd_mask_all_attr = CD_MASK_PROP_ALL | cd_mask_non_generic;
 
   for (int i = 0; i < c1->totlayer; i++) {
@@ -524,7 +511,6 @@ static int customdata_compare(
                 return MESHCMP_VERTCOMISMATCH;
               }
             }
-            /* I don't care about normals, let's just do coordinates. */
           }
           break;
         }
@@ -596,7 +582,7 @@ static int customdata_compare(
           }
           break;
         }
-        case CD_MLOOPCOL: {
+        case CD_PROP_BYTE_COLOR: {
           MLoopCol *lp1 = (MLoopCol *)l1->data;
           MLoopCol *lp2 = (MLoopCol *)l2->data;
           int ltot = m1->totloop;
@@ -677,6 +663,17 @@ static int customdata_compare(
         case CD_PROP_INT32: {
           const int *l1_data = (int *)l1->data;
           const int *l2_data = (int *)l2->data;
+
+          for (int i = 0; i < total_length; i++) {
+            if (l1_data[i] != l2_data[i]) {
+              return MESHCMP_ATTRIBUTE_VALUE_MISMATCH;
+            }
+          }
+          break;
+        }
+        case CD_PROP_INT8: {
+          const int8_t *l1_data = (int8_t *)l1->data;
+          const int8_t *l2_data = (int8_t *)l2->data;
 
           for (int i = 0; i < total_length; i++) {
             if (l1_data[i] != l2_data[i]) {
@@ -772,7 +769,7 @@ static void mesh_ensure_tessellation_customdata(Mesh *me)
   }
   else {
     const int tottex_original = CustomData_number_of_layers(&me->ldata, CD_MLOOPUV);
-    const int totcol_original = CustomData_number_of_layers(&me->ldata, CD_MLOOPCOL);
+    const int totcol_original = CustomData_number_of_layers(&me->ldata, CD_PROP_BYTE_COLOR);
 
     const int tottex_tessface = CustomData_number_of_layers(&me->fdata, CD_MTFACE);
     const int totcol_tessface = CustomData_number_of_layers(&me->fdata, CD_MCOL);
@@ -790,7 +787,8 @@ static void mesh_ensure_tessellation_customdata(Mesh *me)
          * some info to help troubleshoot what's going on. */
         printf(
             "%s: warning! Tessellation uvs or vcol data got out of sync, "
-            "had to reset!\n    CD_MTFACE: %d != CD_MLOOPUV: %d || CD_MCOL: %d != CD_MLOOPCOL: "
+            "had to reset!\n    CD_MTFACE: %d != CD_MLOOPUV: %d || CD_MCOL: %d != "
+            "CD_PROP_BYTE_COLOR: "
             "%d\n",
             __func__,
             tottex_tessface,
@@ -875,7 +873,7 @@ bool BKE_mesh_clear_facemap_customdata(struct Mesh *me)
 
 /**
  * This ensures grouped custom-data (e.g. #CD_MLOOPUV and #CD_MTFACE, or
- * #CD_MLOOPCOL and #CD_MCOL) have the same relative active/render/clone/mask indices.
+ * #CD_PROP_BYTE_COLOR and #CD_MCOL) have the same relative active/render/clone/mask indices.
  *
  * NOTE(@campbellbarton): that for undo mesh data we want to skip 'ensure_tess_cd' call since
  * we don't want to store memory for #MFace data when its only used for older
@@ -906,7 +904,7 @@ void BKE_mesh_update_customdata_pointers(Mesh *me, const bool do_ensure_tess_cd)
   me->mpoly = (MPoly *)CustomData_get_layer(&me->pdata, CD_MPOLY);
   me->mloop = (MLoop *)CustomData_get_layer(&me->ldata, CD_MLOOP);
 
-  me->mloopcol = (MLoopCol *)CustomData_get_layer(&me->ldata, CD_MLOOPCOL);
+  me->mloopcol = (MLoopCol *)CustomData_get_layer(&me->ldata, CD_PROP_BYTE_COLOR);
   me->mloopuv = (MLoopUV *)CustomData_get_layer(&me->ldata, CD_MLOOPUV);
 }
 
@@ -1111,22 +1109,13 @@ Mesh *BKE_mesh_new_nomain_from_template_ex(const Mesh *me_src,
     mesh_tessface_clear_intern(me_dst, false);
   }
 
-  me_dst->runtime.cd_dirty_poly = me_src->runtime.cd_dirty_poly;
-  me_dst->runtime.cd_dirty_vert = me_src->runtime.cd_dirty_vert;
-
-  /* Ensure that when no normal layers exist, they are marked dirty, because
-   * normals might not have been included in the mask of copied layers. */
-  if (!CustomData_has_layer(&me_dst->vdata, CD_NORMAL)) {
-    me_dst->runtime.cd_dirty_vert |= CD_MASK_NORMAL;
-  }
-  if (!CustomData_has_layer(&me_dst->pdata, CD_NORMAL)) {
-    me_dst->runtime.cd_dirty_poly |= CD_MASK_NORMAL;
-  }
-
   /* The destination mesh should at least have valid primary CD layers,
    * even in cases where the source mesh does not. */
   mesh_ensure_cdlayers_primary(me_dst, do_tessface);
   BKE_mesh_update_customdata_pointers(me_dst, false);
+
+  /* Expect that normals aren't copied at all, since the destination mesh is new. */
+  BLI_assert(BKE_mesh_vertex_normals_are_dirty(me_dst));
 
   return me_dst;
 }
@@ -1182,6 +1171,7 @@ BMesh *BKE_mesh_to_bmesh(Mesh *me,
 {
   BMeshFromMeshParams bmesh_from_mesh_params{};
   bmesh_from_mesh_params.calc_face_normal = false;
+  bmesh_from_mesh_params.calc_vert_normal = false;
   bmesh_from_mesh_params.add_key_index = add_key_index;
   bmesh_from_mesh_params.use_shapekey = true;
   bmesh_from_mesh_params.active_shapekey = ob->shapenr;
@@ -1207,6 +1197,23 @@ Mesh *BKE_mesh_from_bmesh_for_eval_nomain(BMesh *bm,
   BM_mesh_bm_to_me_for_eval(bm, mesh, cd_mask_extra);
   BKE_mesh_copy_parameters_for_eval(mesh, me_settings);
   return mesh;
+}
+
+static void ensure_orig_index_layer(CustomData &data, const int size)
+{
+  if (CustomData_has_layer(&data, CD_ORIGINDEX)) {
+    return;
+  }
+  int *indices = (int *)CustomData_add_layer(&data, CD_ORIGINDEX, CD_DEFAULT, nullptr, size);
+  range_vn_i(indices, size, 0);
+}
+
+void BKE_mesh_ensure_default_orig_index_customdata(Mesh *mesh)
+{
+  BLI_assert(mesh->runtime.wrapper_type == ME_WRAPPER_TYPE_MDATA);
+  ensure_orig_index_layer(mesh->vdata, mesh->totvert);
+  ensure_orig_index_layer(mesh->edata, mesh->totedge);
+  ensure_orig_index_layer(mesh->pdata, mesh->totpoly);
 }
 
 BoundBox *BKE_mesh_boundbox_get(Object *ob)
@@ -1686,6 +1693,7 @@ void BKE_mesh_transform(Mesh *me, const float mat[4][4], bool do_keys)
       mul_m3_v3(m3, *lnors);
     }
   }
+  BKE_mesh_normals_tag_dirty(me);
 }
 
 void BKE_mesh_translate(Mesh *me, const float offset[3], const bool do_keys)
@@ -1922,6 +1930,14 @@ void BKE_mesh_vert_coords_apply_with_mat4(Mesh *mesh,
   BKE_mesh_normals_tag_dirty(mesh);
 }
 
+void BKE_mesh_anonymous_attributes_remove(Mesh *mesh)
+{
+  CustomData_free_layers_anonymous(&mesh->vdata, mesh->totvert);
+  CustomData_free_layers_anonymous(&mesh->edata, mesh->totedge);
+  CustomData_free_layers_anonymous(&mesh->pdata, mesh->totpoly);
+  CustomData_free_layers_anonymous(&mesh->ldata, mesh->totloop);
+}
+
 void BKE_mesh_calc_normals_split_ex(Mesh *mesh, MLoopNorSpaceArray *r_lnors_spacearr)
 {
   float(*r_loopnors)[3];
@@ -1965,8 +1981,6 @@ void BKE_mesh_calc_normals_split_ex(Mesh *mesh, MLoopNorSpaceArray *r_lnors_spac
                               nullptr);
 
   BKE_mesh_assert_normals_dirty_or_calculated(mesh);
-
-  mesh->runtime.cd_dirty_loop &= ~CD_MASK_NORMAL;
 }
 
 void BKE_mesh_calc_normals_split(Mesh *mesh)
@@ -2144,6 +2158,10 @@ static void split_faces_split_new_verts(Mesh *mesh,
   MVert *mvert = mesh->mvert;
   float(*vert_normals)[3] = BKE_mesh_vertex_normals_for_write(mesh);
 
+  /* Normals were already calculated at the beginning of this operation, we rely on that to update
+   * them partially here. */
+  BLI_assert(!BKE_mesh_vertex_normals_are_dirty(mesh));
+
   /* Remember new_verts is a single linklist, so its items are in reversed order... */
   MVert *new_mv = &mvert[mesh->totvert - 1];
   for (int i = mesh->totvert - 1; i >= verts_len; i--, new_mv--, new_verts = new_verts->next) {
@@ -2154,7 +2172,6 @@ static void split_faces_split_new_verts(Mesh *mesh,
       copy_v3_v3(vert_normals[i], new_verts->vnor);
     }
   }
-  BKE_mesh_vertex_normals_clear_dirty(mesh);
 }
 
 /* Perform actual split of edges. */
@@ -2224,6 +2241,10 @@ void BKE_mesh_split_faces(Mesh *mesh, bool free_loop_normals)
     }
     /* Update pointers to a newly allocated memory. */
     BKE_mesh_update_customdata_pointers(mesh, false);
+
+    /* Update normals manually to avoid recalculation after this operation. */
+    mesh->runtime.vert_normals = (float(*)[3])MEM_reallocN(mesh->runtime.vert_normals,
+                                                           sizeof(float[3]) * mesh->totvert);
 
     /* Perform actual split of vertices and edges. */
     split_faces_split_new_verts(mesh, new_verts, num_new_verts);

@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2021 by Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2021 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup draw
@@ -477,7 +461,14 @@ MeshRenderData *mesh_render_data_create(Object *object,
       mr->bm_poly_centers = mr->edit_data->polyCos;
     }
 
-    bool has_mdata = is_mode_active && (mr->me->runtime.wrapper_type == ME_WRAPPER_TYPE_MDATA);
+    /* A subdivision wrapper may be created in edit mode when X-ray is turned on to ensure that the
+     * topology seen by the user matches the one used for the selection routines. This wrapper
+     * seemingly takes precedence over the MDATA one, however the mesh we use for rendering is not
+     * the subdivided one, but the one where the MDATA wrapper would have been added. So consider
+     * the subdivision wrapper as well for the `has_mdata` case. */
+    bool has_mdata = is_mode_active && ELEM(mr->me->runtime.wrapper_type,
+                                            ME_WRAPPER_TYPE_MDATA,
+                                            ME_WRAPPER_TYPE_SUBD);
     bool use_mapped = is_mode_active &&
                       (has_mdata && !do_uvedit && mr->me && !mr->me->runtime.is_original);
 

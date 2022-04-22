@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup bke
@@ -296,7 +280,7 @@ static GPUTexture **get_image_gpu_texture_ptr(Image *ima,
 {
   const bool in_range = (textarget >= 0) && (textarget < TEXTARGET_COUNT);
   BLI_assert(in_range);
-  BLI_assert(multiview_eye == 0 || multiview_eye == 1);
+  BLI_assert(ELEM(multiview_eye, 0, 1));
   const int resolution = (texture_resolution == IMA_TEXTURE_RESOLUTION_LIMITED) ? 1 : 0;
 
   if (in_range) {
@@ -338,19 +322,25 @@ static void image_gpu_texture_partial_update_changes_available(
     Image *image, PartialUpdateChecker<ImageTileData>::CollectResult &changes)
 {
   while (changes.get_next_change() == ePartialUpdateIterResult::ChangeAvailable) {
-    const int tile_offset_x = changes.changed_region.region.xmin;
-    const int tile_offset_y = changes.changed_region.region.ymin;
-    const int tile_width = min_ii(changes.tile_data.tile_buffer->x,
-                                  BLI_rcti_size_x(&changes.changed_region.region));
-    const int tile_height = min_ii(changes.tile_data.tile_buffer->y,
-                                   BLI_rcti_size_y(&changes.changed_region.region));
+    /* Calculate the clipping region with the tile buffer.
+     * TODO(jbakker): should become part of ImageTileData to deduplicate with image engine. */
+    rcti buffer_rect;
+    BLI_rcti_init(
+        &buffer_rect, 0, changes.tile_data.tile_buffer->x, 0, changes.tile_data.tile_buffer->y);
+    rcti clipped_update_region;
+    const bool has_overlap = BLI_rcti_isect(
+        &buffer_rect, &changes.changed_region.region, &clipped_update_region);
+    if (!has_overlap) {
+      continue;
+    }
+
     image_update_gputexture_ex(image,
                                changes.tile_data.tile,
                                changes.tile_data.tile_buffer,
-                               tile_offset_x,
-                               tile_offset_y,
-                               tile_width,
-                               tile_height);
+                               clipped_update_region.xmin,
+                               clipped_update_region.ymin,
+                               BLI_rcti_size_x(&clipped_update_region),
+                               BLI_rcti_size_y(&clipped_update_region));
   }
 }
 
@@ -405,17 +395,8 @@ static GPUTexture *image_get_gpu_texture(Image *ima,
     ima->gpu_pass = requested_pass;
     ima->gpu_layer = requested_layer;
     ima->gpu_view = requested_view;
-    ima->gpuflag |= IMA_GPU_REFRESH;
   }
 #undef GPU_FLAGS_TO_CHECK
-
-  /* TODO(jbakker): We should replace the IMA_GPU_REFRESH flag with a call to
-   * BKE_image-partial_update_mark_full_update. Although the flag is quicker it leads to double
-   * administration. */
-  if ((ima->gpuflag & IMA_GPU_REFRESH) != 0) {
-    BKE_image_partial_update_mark_full_update(ima);
-    ima->gpuflag &= ~IMA_GPU_REFRESH;
-  }
 
   if (ima->runtime.partial_update_user == nullptr) {
     ima->runtime.partial_update_user = BKE_image_partial_update_create(ima);
@@ -456,7 +437,8 @@ static GPUTexture *image_get_gpu_texture(Image *ima,
   if (ibuf_intern == nullptr) {
     ibuf_intern = BKE_image_acquire_ibuf(ima, iuser, nullptr);
     if (ibuf_intern == nullptr) {
-      return image_gpu_texture_error_create(textarget);
+      *tex = image_gpu_texture_error_create(textarget);
+      return *tex;
     }
   }
 

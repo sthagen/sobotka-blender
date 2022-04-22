@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup bke
@@ -39,6 +25,7 @@
 #include "BLI_utildefines.h"
 
 #include "BKE_DerivedMesh.h"
+#include "BKE_curves.hh"
 #include "BKE_deform.h"
 #include "BKE_displist.h"
 #include "BKE_editmesh.h"
@@ -133,9 +120,6 @@ void BKE_mesh_from_metaball(ListBase *lb, Mesh *me)
     }
 
     BKE_mesh_update_customdata_pointers(me, true);
-
-    BKE_mesh_normals_tag_dirty(me);
-
     BKE_mesh_calc_edges(me, true, false);
   }
 }
@@ -527,7 +511,6 @@ Mesh *BKE_mesh_new_nomain_from_curve_displist(const Object *ob, const ListBase *
   }
 
   mesh = BKE_mesh_new_nomain(totvert, totedge, 0, totloop, totpoly);
-  BKE_mesh_normals_tag_dirty(mesh);
 
   if (totvert != 0) {
     memcpy(mesh->mvert, allvert, totvert * sizeof(MVert));
@@ -714,7 +697,7 @@ void BKE_mesh_to_curve_nurblist(const Mesh *me, ListBase *nurblist, const int ed
         VertLink *vl;
 
         /* create new 'nurb' within the curve */
-        nu = MEM_cnew<Nurb>("MeshNurb");
+        nu = MEM_new<Nurb>("MeshNurb", blender::dna::shallow_zero_initialize());
 
         nu->pntsu = totpoly;
         nu->pntsv = 1;
@@ -753,14 +736,14 @@ void BKE_mesh_to_curve(Main *bmain, Depsgraph *depsgraph, Scene *UNUSED(scene), 
   BKE_mesh_to_curve_nurblist(me_eval, &nurblist, 1);
 
   if (nurblist.first) {
-    Curve *cu = BKE_curve_add(bmain, ob->id.name + 2, OB_CURVE);
+    Curve *cu = BKE_curve_add(bmain, ob->id.name + 2, OB_CURVES_LEGACY);
     cu->flag |= CU_3D;
 
     cu->nurb = nurblist;
 
     id_us_min(&((Mesh *)ob->data)->id);
     ob->data = cu;
-    ob->type = OB_CURVE;
+    ob->type = OB_CURVES_LEGACY;
 
     BKE_object_free_derived_caches(ob);
   }
@@ -900,7 +883,7 @@ static void object_for_curve_to_mesh_free(Object *temp_object)
 {
   /* Clear edit mode pointers that were explicitly copied to the temporary curve. */
   ID *final_object_data = static_cast<ID *>(temp_object->data);
-  if (GS(final_object_data->name) == ID_CU) {
+  if (GS(final_object_data->name) == ID_CU_LEGACY) {
     Curve &curve = *reinterpret_cast<Curve *>(final_object_data);
     curve.editfont = nullptr;
     curve.editnurb = nullptr;
@@ -915,7 +898,7 @@ static void object_for_curve_to_mesh_free(Object *temp_object)
  */
 static void curve_to_mesh_eval_ensure(Object &object)
 {
-  BLI_assert(GS(static_cast<ID *>(object.data)->name) == ID_CU);
+  BLI_assert(GS(static_cast<ID *>(object.data)->name) == ID_CU_LEGACY);
   Curve &curve = *static_cast<Curve *>(object.data);
   /* Clear all modifiers for the bevel object.
    *
@@ -924,18 +907,18 @@ static void curve_to_mesh_eval_ensure(Object &object)
    *
    * So we create temporary copy of the object which will use same data as the original bevel, but
    * will have no modifiers. */
-  Object bevel_object = {{nullptr}};
+  Object bevel_object = blender::dna::shallow_zero_initialize();
   if (curve.bevobj != nullptr) {
-    memcpy(&bevel_object, curve.bevobj, sizeof(bevel_object));
+    bevel_object = blender::dna::shallow_copy(*curve.bevobj);
     BLI_listbase_clear(&bevel_object.modifiers);
     BKE_object_runtime_reset(&bevel_object);
     curve.bevobj = &bevel_object;
   }
 
   /* Same thing for taper. */
-  Object taper_object = {{nullptr}};
+  Object taper_object = blender::dna::shallow_zero_initialize();
   if (curve.taperobj != nullptr) {
-    memcpy(&taper_object, curve.taperobj, sizeof(taper_object));
+    taper_object = blender::dna::shallow_copy(*curve.taperobj);
     BLI_listbase_clear(&taper_object.modifiers);
     BKE_object_runtime_reset(&taper_object);
     curve.taperobj = &taper_object;
@@ -967,11 +950,11 @@ static const Mesh *get_evaluated_mesh_from_object(const Object *object)
   return nullptr;
 }
 
-static const CurveEval *get_evaluated_curve_from_object(const Object *object)
+static const Curves *get_evaluated_curves_from_object(const Object *object)
 {
   GeometrySet *geometry_set_eval = object->runtime.geometry_set_eval;
   if (geometry_set_eval) {
-    return geometry_set_eval->get_curve_for_read();
+    return geometry_set_eval->get_curves_for_read();
   }
   return nullptr;
 }
@@ -982,9 +965,9 @@ static Mesh *mesh_new_from_evaluated_curve_type_object(const Object *evaluated_o
   if (mesh) {
     return BKE_mesh_copy_for_eval(mesh, false);
   }
-  const CurveEval *curve = get_evaluated_curve_from_object(evaluated_object);
-  if (curve) {
-    return blender::bke::curve_to_wire_mesh(*curve);
+  const Curves *curves = get_evaluated_curves_from_object(evaluated_object);
+  if (curves) {
+    return blender::bke::curve_to_wire_mesh(blender::bke::CurvesGeometry::wrap(curves->geometry));
   }
   return nullptr;
 }
@@ -1051,7 +1034,12 @@ static Mesh *mesh_new_from_mesh(Object *object, Mesh *mesh)
 {
   /* While we could copy this into the new mesh,
    * add the data to 'mesh' so future calls to this function don't need to re-convert the data. */
-  BKE_mesh_wrapper_ensure_mdata(mesh);
+  if (mesh->runtime.wrapper_type == ME_WRAPPER_TYPE_BMESH) {
+    BKE_mesh_wrapper_ensure_mdata(mesh);
+  }
+  else {
+    mesh = BKE_mesh_wrapper_ensure_subdivision(object, mesh);
+  }
 
   Mesh *mesh_result = (Mesh *)BKE_id_copy_ex(
       nullptr, &mesh->id, nullptr, LIB_ID_CREATE_NO_MAIN | LIB_ID_CREATE_NO_USER_REFCOUNT);
@@ -1073,8 +1061,7 @@ static Mesh *mesh_new_from_mesh_object_with_layers(Depsgraph *depsgraph,
     return nullptr;
   }
 
-  Object object_for_eval;
-  memcpy(&object_for_eval, object, sizeof(object_for_eval));
+  Object object_for_eval = blender::dna::shallow_copy(*object);
   if (object_for_eval.runtime.data_orig != nullptr) {
     object_for_eval.data = object_for_eval.runtime.data_orig;
   }
@@ -1088,7 +1075,7 @@ static Mesh *mesh_new_from_mesh_object_with_layers(Depsgraph *depsgraph,
     mask.pmask |= CD_MASK_ORIGINDEX;
   }
   Mesh *result = mesh_create_eval_final(depsgraph, scene, &object_for_eval, &mask);
-  return result;
+  return BKE_mesh_wrapper_ensure_subdivision(object, result);
 }
 
 static Mesh *mesh_new_from_mesh_object(Depsgraph *depsgraph,
@@ -1119,7 +1106,7 @@ Mesh *BKE_mesh_new_from_object(Depsgraph *depsgraph,
   Mesh *new_mesh = nullptr;
   switch (object->type) {
     case OB_FONT:
-    case OB_CURVE:
+    case OB_CURVES_LEGACY:
     case OB_SURF:
       new_mesh = mesh_new_from_curve_type_object(object);
       break;
@@ -1191,7 +1178,7 @@ Mesh *BKE_mesh_new_from_object_to_bmain(Main *bmain,
                                         Object *object,
                                         bool preserve_all_data_layers)
 {
-  BLI_assert(ELEM(object->type, OB_FONT, OB_CURVE, OB_SURF, OB_MBALL, OB_MESH));
+  BLI_assert(ELEM(object->type, OB_FONT, OB_CURVES_LEGACY, OB_SURF, OB_MBALL, OB_MESH));
 
   Mesh *mesh = BKE_mesh_new_from_object(depsgraph, object, preserve_all_data_layers, false);
   if (mesh == nullptr) {
@@ -1230,6 +1217,9 @@ Mesh *BKE_mesh_new_from_object_to_bmain(Main *bmain,
   mesh->mat = nullptr;
 
   BKE_mesh_nomain_to_mesh(mesh, mesh_in_bmain, nullptr, &CD_MASK_MESH, true);
+
+  /* Anonymous attributes shouldn't exist on original data. */
+  BKE_mesh_anonymous_attributes_remove(mesh_in_bmain);
 
   /* User-count is required because so far mesh was in a limbo, where library management does
    * not perform any user management (i.e. copy of a mesh will not increase users of materials). */
@@ -1313,7 +1303,7 @@ Mesh *BKE_mesh_create_derived_for_modifier(struct Depsgraph *depsgraph,
 
   if (build_shapekey_layers && me->key &&
       (kb = (KeyBlock *)BLI_findlink(&me->key->block, ob_eval->shapenr - 1))) {
-    BKE_keyblock_convert_to_mesh(kb, me);
+    BKE_keyblock_convert_to_mesh(kb, me->mvert, me->totvert);
   }
 
   Mesh *mesh_temp = (Mesh *)BKE_id_copy_ex(nullptr, &me->id, nullptr, LIB_ID_COPY_LOCALIZE);
@@ -1452,8 +1442,7 @@ void BKE_mesh_nomain_to_mesh(Mesh *mesh_src,
   /* mesh_src might depend on mesh_dst, so we need to do everything with a local copy */
   /* TODO(Sybren): the above claim came from 2.7x derived-mesh code (DM_to_mesh);
    * check whether it is still true with Mesh */
-  Mesh tmp;
-  memcpy(&tmp, mesh_dst, sizeof(tmp));
+  Mesh tmp = blender::dna::shallow_copy(*mesh_dst);
   int totvert, totedge /*, totface */ /* UNUSED */, totloop, totpoly;
   bool did_shapekeys = false;
   eCDAllocType alloctype = CD_DUPLICATE;
@@ -1487,17 +1476,8 @@ void BKE_mesh_nomain_to_mesh(Mesh *mesh_src,
   tmp.cd_flag = mesh_src->cd_flag;
   tmp.runtime.deformed_only = mesh_src->runtime.deformed_only;
 
-  tmp.runtime.cd_dirty_poly = mesh_src->runtime.cd_dirty_poly;
-  tmp.runtime.cd_dirty_vert = mesh_src->runtime.cd_dirty_vert;
-
-  /* Ensure that when no normal layers exist, they are marked dirty, because
-   * normals might not have been included in the mask of copied layers. */
-  if (!CustomData_has_layer(&tmp.vdata, CD_NORMAL)) {
-    tmp.runtime.cd_dirty_vert |= CD_MASK_NORMAL;
-  }
-  if (!CustomData_has_layer(&tmp.pdata, CD_NORMAL)) {
-    tmp.runtime.cd_dirty_poly |= CD_MASK_NORMAL;
-  }
+  /* Clear the normals completely, since the new vertex / polygon count might be different. */
+  BKE_mesh_clear_derived_normals(&tmp);
 
   if (CustomData_has_layer(&mesh_src->vdata, CD_SHAPEKEY)) {
     KeyBlock *kb;

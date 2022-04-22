@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup GHOST
@@ -165,6 +149,12 @@ GHOST_WindowWin32::GHOST_WindowWin32(GHOST_SystemWin32 *system,
   if (!m_system->m_windowFocus) {
     /* If we don't want focus then lower to bottom. */
     ::SetWindowPos(m_hWnd, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+  }
+
+  if (parentwindow) {
+    /* Release any parent capture to allow immediate interaction (T90110). */
+    ::ReleaseCapture();
+    parentwindow->lostMouseCapture();
   }
 
   /* Show the window. */
@@ -970,6 +960,7 @@ GHOST_Wintab *GHOST_WindowWin32::getWintab() const
 void GHOST_WindowWin32::loadWintab(bool enable)
 {
   if (!m_wintab) {
+    WINTAB_PRINTF("Loading Wintab for window %p\n", m_hWnd);
     if (m_wintab = GHOST_Wintab::loadWintab(m_hWnd)) {
       if (enable) {
         m_wintab->enable();
@@ -992,6 +983,7 @@ void GHOST_WindowWin32::loadWintab(bool enable)
 
 void GHOST_WindowWin32::closeWintab()
 {
+  WINTAB_PRINTF("Closing Wintab for window %p\n", m_hWnd);
   delete m_wintab;
   m_wintab = NULL;
 }

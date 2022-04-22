@@ -1,18 +1,5 @@
-/*
- * Copyright 2011-2021 Blender Foundation
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+/* SPDX-License-Identifier: Apache-2.0
+ * Copyright 2011-2022 Blender Foundation */
 
 #include "integrator/path_trace.h"
 
@@ -67,14 +54,7 @@ PathTrace::PathTrace(Device *device,
 
 PathTrace::~PathTrace()
 {
-  /* Destroy any GPU resource which was used for graphics interop.
-   * Need to have access to the PathTraceDisplay as it is the only source of drawing context which
-   * is used for interop. */
-  if (display_) {
-    for (auto &&path_trace_work : path_trace_works_) {
-      path_trace_work->destroy_gpu_resources(display_.get());
-    }
-  }
+  destroy_gpu_resources();
 }
 
 void PathTrace::load_kernels()
@@ -354,7 +334,7 @@ void PathTrace::init_render_buffers(const RenderWork &render_work)
 
   /* Handle initialization scheduled by the render scheduler. */
   if (render_work.init_render_buffers) {
-    tbb::parallel_for_each(path_trace_works_, [&](unique_ptr<PathTraceWork> &path_trace_work) {
+    parallel_for_each(path_trace_works_, [&](unique_ptr<PathTraceWork> &path_trace_work) {
       path_trace_work->zero_render_buffers();
     });
 
@@ -375,7 +355,9 @@ void PathTrace::path_trace(RenderWork &render_work)
 
   const int num_works = path_trace_works_.size();
 
-  tbb::parallel_for(0, num_works, [&](int i) {
+  thread_capture_fp_settings();
+
+  parallel_for(0, num_works, [&](int i) {
     const double work_start_time = time_dt();
     const int num_samples = render_work.path_trace.num_samples;
 
@@ -425,7 +407,7 @@ void PathTrace::adaptive_sample(RenderWork &render_work)
     const double start_time = time_dt();
 
     uint num_active_pixels = 0;
-    tbb::parallel_for_each(path_trace_works_, [&](unique_ptr<PathTraceWork> &path_trace_work) {
+    parallel_for_each(path_trace_works_, [&](unique_ptr<PathTraceWork> &path_trace_work) {
       const uint num_active_pixels_in_work =
           path_trace_work->adaptive_sampling_converge_filter_count_active(
               render_work.adaptive_sampling.threshold, render_work.adaptive_sampling.reset);
@@ -486,7 +468,7 @@ void PathTrace::set_denoiser_params(const DenoiseParams &params)
   denoiser_ = Denoiser::create(device_, params);
 
   /* Only take into account the "immediate" cancel to have interactive rendering responding to
-   * navigation as quickly as possible, but allow to run denoiser after user hit Esc button while
+   * navigation as quickly as possible, but allow to run denoiser after user hit Escape key while
    * doing offline rendering. */
   denoiser_->is_cancelled_cb = [this]() { return render_cancel_.is_requested; };
 }
@@ -503,7 +485,7 @@ void PathTrace::cryptomatte_postprocess(const RenderWork &render_work)
   }
   VLOG(3) << "Perform cryptomatte work.";
 
-  tbb::parallel_for_each(path_trace_works_, [&](unique_ptr<PathTraceWork> &path_trace_work) {
+  parallel_for_each(path_trace_works_, [&](unique_ptr<PathTraceWork> &path_trace_work) {
     path_trace_work->cryptomatte_postproces();
   });
 }
@@ -556,7 +538,7 @@ void PathTrace::denoise(const RenderWork &render_work)
 
   if (multi_device_buffers) {
     multi_device_buffers->copy_from_device();
-    tbb::parallel_for_each(
+    parallel_for_each(
         path_trace_works_, [&multi_device_buffers](unique_ptr<PathTraceWork> &path_trace_work) {
           path_trace_work->copy_from_denoised_render_buffers(multi_device_buffers.get());
         });
@@ -572,6 +554,11 @@ void PathTrace::set_output_driver(unique_ptr<OutputDriver> driver)
 
 void PathTrace::set_display_driver(unique_ptr<DisplayDriver> driver)
 {
+  /* The display driver is the source of the drawing context which might be used by
+   * path trace works. Make sure there is no graphics interop using resources from
+   * the old display, as it might no longer be available after this call. */
+  destroy_gpu_resources();
+
   if (driver) {
     display_ = make_unique<PathTraceDisplay>(move(driver));
   }
@@ -821,7 +808,7 @@ void PathTrace::tile_buffer_read()
   }
 
   /* Read buffers back from device. */
-  tbb::parallel_for_each(path_trace_works_, [&](unique_ptr<PathTraceWork> &path_trace_work) {
+  parallel_for_each(path_trace_works_, [&](unique_ptr<PathTraceWork> &path_trace_work) {
     path_trace_work->copy_render_buffers_from_device();
   });
 
@@ -829,7 +816,7 @@ void PathTrace::tile_buffer_read()
   PathTraceTile tile(*this);
   if (output_driver_->read_render_tile(tile)) {
     /* Copy buffers to device again. */
-    tbb::parallel_for_each(path_trace_works_, [](unique_ptr<PathTraceWork> &path_trace_work) {
+    parallel_for_each(path_trace_works_, [](unique_ptr<PathTraceWork> &path_trace_work) {
       path_trace_work->copy_render_buffers_to_device();
     });
   }
@@ -893,20 +880,20 @@ void PathTrace::progress_set_status(const string &status, const string &substatu
 
 void PathTrace::copy_to_render_buffers(RenderBuffers *render_buffers)
 {
-  tbb::parallel_for_each(path_trace_works_,
-                         [&render_buffers](unique_ptr<PathTraceWork> &path_trace_work) {
-                           path_trace_work->copy_to_render_buffers(render_buffers);
-                         });
+  parallel_for_each(path_trace_works_,
+                    [&render_buffers](unique_ptr<PathTraceWork> &path_trace_work) {
+                      path_trace_work->copy_to_render_buffers(render_buffers);
+                    });
   render_buffers->copy_to_device();
 }
 
 void PathTrace::copy_from_render_buffers(RenderBuffers *render_buffers)
 {
   render_buffers->copy_from_device();
-  tbb::parallel_for_each(path_trace_works_,
-                         [&render_buffers](unique_ptr<PathTraceWork> &path_trace_work) {
-                           path_trace_work->copy_from_render_buffers(render_buffers);
-                         });
+  parallel_for_each(path_trace_works_,
+                    [&render_buffers](unique_ptr<PathTraceWork> &path_trace_work) {
+                      path_trace_work->copy_from_render_buffers(render_buffers);
+                    });
 }
 
 bool PathTrace::copy_render_tile_from_device()
@@ -918,7 +905,7 @@ bool PathTrace::copy_render_tile_from_device()
 
   bool success = true;
 
-  tbb::parallel_for_each(path_trace_works_, [&](unique_ptr<PathTraceWork> &path_trace_work) {
+  parallel_for_each(path_trace_works_, [&](unique_ptr<PathTraceWork> &path_trace_work) {
     if (!success) {
       return;
     }
@@ -1019,7 +1006,7 @@ bool PathTrace::get_render_tile_pixels(const PassAccessor &pass_accessor,
 
   bool success = true;
 
-  tbb::parallel_for_each(path_trace_works_, [&](unique_ptr<PathTraceWork> &path_trace_work) {
+  parallel_for_each(path_trace_works_, [&](unique_ptr<PathTraceWork> &path_trace_work) {
     if (!success) {
       return;
     }
@@ -1036,7 +1023,7 @@ bool PathTrace::set_render_tile_pixels(PassAccessor &pass_accessor,
 {
   bool success = true;
 
-  tbb::parallel_for_each(path_trace_works_, [&](unique_ptr<PathTraceWork> &path_trace_work) {
+  parallel_for_each(path_trace_works_, [&](unique_ptr<PathTraceWork> &path_trace_work) {
     if (!success) {
       return;
     }
@@ -1086,6 +1073,18 @@ const BufferParams &PathTrace::get_render_tile_params() const
 bool PathTrace::has_denoised_result() const
 {
   return render_state_.has_denoised_result;
+}
+
+void PathTrace::destroy_gpu_resources()
+{
+  /* Destroy any GPU resource which was used for graphics interop.
+   * Need to have access to the PathTraceDisplay as it is the only source of drawing context which
+   * is used for interop. */
+  if (display_) {
+    for (auto &&path_trace_work : path_trace_works_) {
+      path_trace_work->destroy_gpu_resources(display_.get());
+    }
+  }
 }
 
 /* --------------------------------------------------------------------

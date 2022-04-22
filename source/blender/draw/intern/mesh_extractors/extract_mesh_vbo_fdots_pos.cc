@@ -1,25 +1,11 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2021 by Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2021 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup draw
  */
+
+#include "BLI_bitmap.h"
 
 #include "extract_mesh.h"
 
@@ -91,14 +77,14 @@ static void extract_fdots_pos_iter_poly_mesh(const MeshRenderData *mr,
 
   const MVert *mvert = mr->mvert;
   const MLoop *mloop = mr->mloop;
+  const BLI_bitmap *facedot_tags = mr->me->runtime.subsurf_face_dot_tags;
 
   const int ml_index_end = mp->loopstart + mp->totloop;
   for (int ml_index = mp->loopstart; ml_index < ml_index_end; ml_index += 1) {
     const MLoop *ml = &mloop[ml_index];
     if (mr->use_subsurf_fdots) {
-      const MVert *mv = &mr->mvert[ml->v];
-      if (mv->flag & ME_VERT_FACEDOT) {
-        copy_v3_v3(center[mp_index], mv->co);
+      if (BLI_BITMAP_TEST(facedot_tags, ml->v)) {
+        copy_v3_v3(center[mp_index], mvert[ml->v].co);
         break;
       }
     }
