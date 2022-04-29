@@ -444,8 +444,10 @@ set(SRC_SHADER_CREATE_INFOS
   ../draw/engines/gpencil/shaders/infos/gpencil_info.hh
   ../draw/engines/gpencil/shaders/infos/gpencil_vfx_info.hh
   ../draw/engines/overlay/shaders/infos/armature_info.hh
+  ../draw/engines/overlay/shaders/infos/extra_info.hh
   ../draw/engines/overlay/shaders/infos/grid_info.hh
   ../draw/engines/overlay/shaders/infos/edit_mode_info.hh
+  ../draw/engines/select/shaders/infos/select_id_info.hh
   ../draw/engines/workbench/shaders/infos/workbench_composite_info.hh
   ../draw/engines/workbench/shaders/infos/workbench_effect_antialiasing_info.hh
   ../draw/engines/workbench/shaders/infos/workbench_effect_cavity_info.hh
@@ -552,7 +554,7 @@ if(WITH_GPU_SHADER_BUILDER)
     if(WIN32)
       # We can re-use the manifest from tests.exe here since it's
       # rather generic and just selects the appropriate common
-      # controls version. 
+      # controls version.
       set(MANIFEST "${CMAKE_BINARY_DIR}/tests.exe.manifest")
     endif()
     add_executable(shader_builder
