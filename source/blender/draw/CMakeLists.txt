@@ -428,7 +428,6 @@ set(GLSL_SRC
 
   engines/overlay/shaders/common_overlay_lib.glsl
   engines/overlay/shaders/antialiasing_frag.glsl
-  engines/overlay/shaders/antialiasing_vert.glsl
   engines/overlay/shaders/armature_dof_vert.glsl
   engines/overlay/shaders/armature_dof_solid_frag.glsl
   engines/overlay/shaders/armature_envelope_outline_vert.glsl
@@ -500,7 +499,10 @@ set(GLSL_SRC
   engines/overlay/shaders/motion_path_point_vert.glsl
   engines/overlay/shaders/outline_detect_frag.glsl
   engines/overlay/shaders/outline_prepass_frag.glsl
+  engines/overlay/shaders/outline_prepass_gpencil_frag.glsl
   engines/overlay/shaders/outline_prepass_geom.glsl
+  engines/overlay/shaders/outline_prepass_gpencil_vert.glsl
+  engines/overlay/shaders/outline_prepass_pointcloud_vert.glsl
   engines/overlay/shaders/outline_prepass_vert.glsl
   engines/overlay/shaders/paint_face_vert.glsl
   engines/overlay/shaders/paint_point_vert.glsl
