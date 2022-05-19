@@ -757,13 +757,14 @@ static bool lib_override_linked_group_tag_collections_keep_tagged_check_recursiv
 static void lib_override_linked_group_tag_clear_boneshapes_objects(LibOverrideGroupTagData *data)
 {
   Main *bmain = data->bmain;
+  ID *id_root = data->id_root;
 
   /* Remove (untag) bone shape objects, they shall never need to be to directly/explicitly
    * overridden. */
   LISTBASE_FOREACH (Object *, ob, &bmain->objects) {
     if (ob->type == OB_ARMATURE && ob->pose != NULL && (ob->id.tag & data->tag)) {
       for (bPoseChannel *pchan = ob->pose->chanbase.first; pchan != NULL; pchan = pchan->next) {
-        if (pchan->custom != NULL) {
+        if (pchan->custom != NULL && &pchan->custom->id != id_root) {
           pchan->custom->id.tag &= ~data->tag;
         }
       }
@@ -773,7 +774,7 @@ static void lib_override_linked_group_tag_clear_boneshapes_objects(LibOverrideGr
   /* Remove (untag) collections if they do not own any tagged object (either themselves, or in
    * their children collections). */
   LISTBASE_FOREACH (Collection *, collection, &bmain->collections) {
-    if ((collection->id.tag & data->tag) == 0) {
+    if ((collection->id.tag & data->tag) == 0 || &collection->id == id_root) {
       continue;
     }
 
@@ -1105,8 +1106,8 @@ static void lib_override_library_create_post_process(Main *bmain,
             if (ID_REAL_USERS(ob_new) != 0) {
               continue;
             }
-            default_instantiating_collection = BKE_collection_add(
-                bmain, (Collection *)id_root, "OVERRIDE_HIDDEN");
+            default_instantiating_collection = BKE_id_new(bmain, ID_GR, "OVERRIDE_HIDDEN");
+            id_us_min(&default_instantiating_collection->id);
             /* Hide the collection from viewport and render. */
             default_instantiating_collection->flag |= COLLECTION_HIDE_VIEWPORT |
                                                       COLLECTION_HIDE_RENDER;
@@ -1137,6 +1138,20 @@ static void lib_override_library_create_post_process(Main *bmain,
 
       BKE_collection_object_add(bmain, default_instantiating_collection, ob_new);
       DEG_id_tag_update_ex(bmain, &ob_new->id, ID_RECALC_TRANSFORM | ID_RECALC_BASE_FLAGS);
+    }
+  }
+
+  if (id_root != NULL && !ELEM(default_instantiating_collection, NULL, scene->master_collection)) {
+    ID *id_ref = id_root->newid != NULL ? id_root->newid : id_root;
+    switch (GS(id_ref->name)) {
+      case ID_GR:
+        BKE_collection_add_from_collection(
+            bmain, scene, (Collection *)id_ref, default_instantiating_collection);
+        break;
+      default:
+        /* Add to master collection. */
+        BKE_collection_add_from_collection(bmain, scene, NULL, default_instantiating_collection);
+        break;
     }
   }
 
@@ -1204,12 +1219,11 @@ static ID *lib_override_root_find(Main *bmain, ID *id, const int curr_level, int
                "Levels of dependency relationships between library overrides IDs is way too high, "
                "skipping further processing loops (involves at least '%s')",
                id->name);
-    BLI_assert(0);
     return NULL;
   }
 
   if (!ID_IS_OVERRIDE_LIBRARY(id)) {
-    BLI_assert(0);
+    BLI_assert_unreachable();
     return NULL;
   }
 
@@ -2073,9 +2087,7 @@ static bool lib_override_resync_tagging_finalize_recurse(
 
     CLOG_INFO(&LOG, 4, "Found root ID '%s' for resync root ID '%s'", id_root->name, id->name);
 
-    if (id_root->override_library == NULL) {
-      BLI_assert(0);
-    }
+    BLI_assert(id_root->override_library != NULL);
 
     LinkNodePair **id_resync_roots_p;
     if (!BLI_ghash_ensure_p(id_roots, id_root, (void ***)&id_resync_roots_p)) {
@@ -2327,7 +2339,6 @@ static int lib_override_sort_libraries_func(LibraryIDLinkCallbackData *cb_data)
           "loops (Involves at least '%s' and '%s')",
           id_owner->lib->filepath,
           id->lib->filepath);
-      BLI_assert(0);
       return IDWALK_RET_NOP;
     }
 
