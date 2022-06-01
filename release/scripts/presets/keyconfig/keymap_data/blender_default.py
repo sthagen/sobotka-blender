@@ -5594,7 +5594,14 @@ def km_sculpt_curves(params):
          {"properties": [("mode", 'NORMAL')]}),
         ("sculpt_curves.brush_stroke", {"type": 'LEFTMOUSE', "value": 'PRESS', "ctrl": True},
          {"properties": [("mode", 'INVERT')]}),
+        ("sculpt_curves.brush_stroke", {"type": 'LEFTMOUSE', "value": 'PRESS', "shift": True},
+         {"properties": [("mode", 'SMOOTH')]}),
+        ("curves.set_selection_domain", {"type": 'ONE', "value": 'PRESS'}, {"properties": [("domain", 'POINT')]}),
+        ("curves.set_selection_domain", {"type": 'TWO', "value": 'PRESS'}, {"properties": [("domain", 'CURVE')]}),
+        ("curves.disable_selection", {"type": 'ONE', "value": 'PRESS', "alt": True}, None),
+        ("curves.disable_selection", {"type": 'TWO', "value": 'PRESS', "alt": True}, None),
         *_template_paint_radial_control("curves_sculpt"),
+        *_template_items_select_actions(params, "sculpt_curves.select_all"),
     ])
 
     return keymap
@@ -6557,7 +6564,10 @@ def km_node_editor_tool_select(params, *, fallback):
         _fallback_id("Node Tool: Tweak", fallback),
         {"space_type": 'NODE_EDITOR', "region_type": 'WINDOW'},
         {"items": [
-            *([] if (fallback and (params.select_mouse == 'RIGHTMOUSE')) else
+            # The node key-map already selects, leave this empty.
+            # NOTE: intentionally don't check `fallback` here (unlike other tweak tool checks).
+            # as this should only be used on LMB select which would otherwise activate on click, not press.
+            *([] if (params.select_mouse == 'RIGHTMOUSE') else
               _template_node_select(type=params.select_mouse, value='PRESS', select_passthrough=True)),
         ]},
     )
