@@ -33,8 +33,7 @@ using namespace blender;
 using namespace blender::ui;
 
 /**
- * Wrapper to store views in a #ListBase. There's no `uiView` base class, we just store views as a
- * #std::variant.
+ * Wrapper to store views in a #ListBase, addressable via an identifier.
  */
 struct ViewLink : public Link {
   std::string idname;
@@ -57,9 +56,9 @@ static T *ui_block_add_view_impl(uiBlock &block,
 
 AbstractGridView *UI_block_add_view(uiBlock &block,
                                     StringRef idname,
-                                    std::unique_ptr<AbstractView> tree_view)
+                                    std::unique_ptr<AbstractGridView> grid_view)
 {
-  return ui_block_add_view_impl<AbstractGridView>(block, idname, std::move(tree_view));
+  return ui_block_add_view_impl<AbstractGridView>(block, idname, std::move(grid_view));
 }
 
 AbstractTreeView *UI_block_add_view(uiBlock &block,
