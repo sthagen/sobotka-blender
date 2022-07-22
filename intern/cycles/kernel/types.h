@@ -535,7 +535,8 @@ typedef struct RaySelfPrimitives {
 typedef struct Ray {
   float3 P;   /* origin */
   float3 D;   /* direction */
-  float t;    /* length of the ray */
+  float tmin; /* start distance */
+  float tmax; /* end distance */
   float time; /* time (for motion blur) */
 
   RaySelfPrimitives self;
@@ -1167,7 +1168,7 @@ typedef struct KernelData {
   uint max_shaders;
   uint volume_stack_size;
 
-  /* Always dynamic data mambers. */
+  /* Always dynamic data members. */
   KernelCamera cam;
   KernelBake bake;
   KernelTables tables;

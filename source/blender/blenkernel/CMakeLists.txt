@@ -101,7 +101,7 @@ set(SRC
   intern/colortools.c
   intern/constraint.c
   intern/context.c
-  intern/crazyspace.c
+  intern/crazyspace.cc
   intern/cryptomatte.cc
   intern/curve.cc
   intern/curve_bevel.c
@@ -185,6 +185,7 @@ set(SRC
   intern/linestyle.c
   intern/main.c
   intern/main_idmap.c
+  intern/main_namemap.cc
   intern/mask.c
   intern/mask_evaluate.c
   intern/mask_rasterize.c
@@ -412,6 +413,7 @@ set(SRC
   BKE_linestyle.h
   BKE_main.h
   BKE_main_idmap.h
+  BKE_main_namemap.h
   BKE_mask.h
   BKE_material.h
   BKE_mball.h
