@@ -11,6 +11,7 @@
 #include "GHOST_EventDragnDrop.h"
 #include "GHOST_EventKey.h"
 #include "GHOST_EventWheel.h"
+#include "GHOST_PathUtils.h"
 #include "GHOST_TimerManager.h"
 #include "GHOST_WindowManager.h"
 #include "GHOST_utildefines.h"
@@ -1138,6 +1139,7 @@ static void data_device_handle_enter(void *data,
   input_t *input = static_cast<input_t *>(data);
   std::lock_guard lock{input->data_offer_dnd_mutex};
 
+  delete input->data_offer_dnd;
   input->data_offer_dnd = static_cast<data_offer_t *>(wl_data_offer_get_user_data(id));
   data_offer_t *data_offer = input->data_offer_dnd;
 
@@ -1197,14 +1199,14 @@ static void data_device_handle_drop(void *data, struct wl_data_device * /*wl_dat
   input_t *input = static_cast<input_t *>(data);
   std::lock_guard lock{input->data_offer_dnd_mutex};
 
-  CLOG_INFO(LOG, 2, "drop");
-
   data_offer_t *data_offer = input->data_offer_dnd;
 
   const std::string mime_receive = *std::find_first_of(mime_preference_order.begin(),
                                                        mime_preference_order.end(),
                                                        data_offer->types.begin(),
                                                        data_offer->types.end());
+
+  CLOG_INFO(LOG, 2, "drop mime_recieve=%s", mime_receive.c_str());
 
   auto read_uris_fn = [](input_t *const input,
                          data_offer_t *data_offer,
@@ -1214,9 +1216,15 @@ static void data_device_handle_drop(void *data, struct wl_data_device * /*wl_dat
 
     const std::string data = read_pipe(data_offer, mime_receive, nullptr);
 
+    CLOG_INFO(
+        LOG, 2, "drop_read_uris mime_receive=%s, data=%s", mime_receive.c_str(), data.c_str());
+
     wl_data_offer_finish(data_offer->id);
     wl_data_offer_destroy(data_offer->id);
 
+    if (input->data_offer_dnd == data_offer) {
+      input->data_offer_dnd = nullptr;
+    }
     delete data_offer;
     data_offer = nullptr;
 
@@ -1224,7 +1232,9 @@ static void data_device_handle_drop(void *data, struct wl_data_device * /*wl_dat
 
     if (mime_receive == mime_text_uri) {
       static constexpr const char *file_proto = "file://";
-      static constexpr const char *crlf = "\r\n";
+      /* NOTE: some applications CRLF (`\r\n`) GTK3 for e.g. & others don't `pcmanfm-qt`.
+       * So support both, once `\n` is found, strip the preceding `\r` if found. */
+      static constexpr const char *lf = "\n";
 
       GHOST_WindowWayland *win = ghost_wl_surface_user_data(surface);
       std::vector<std::string> uris;
@@ -1233,13 +1243,18 @@ static void data_device_handle_drop(void *data, struct wl_data_device * /*wl_dat
       while (true) {
         pos = data.find(file_proto, pos);
         const size_t start = pos + sizeof(file_proto) - 1;
-        pos = data.find(crlf, pos);
-        const size_t end = pos;
+        pos = data.find(lf, pos);
 
         if (pos == std::string::npos) {
           break;
         }
+        /* Account for 'CRLF' case. */
+        size_t end = pos;
+        if (data[end - 1] == '\r') {
+          end -= 1;
+        }
         uris.push_back(data.substr(start, end - start));
+        CLOG_INFO(LOG, 2, "drop_read_uris pos=%zu, text_uri=\"%s\"", start, uris.back().c_str());
       }
 
       GHOST_TStringArray *flist = static_cast<GHOST_TStringArray *>(
@@ -1247,10 +1262,10 @@ static void data_device_handle_drop(void *data, struct wl_data_device * /*wl_dat
       flist->count = int(uris.size());
       flist->strings = static_cast<uint8_t **>(malloc(uris.size() * sizeof(uint8_t *)));
       for (size_t i = 0; i < uris.size(); i++) {
-        flist->strings[i] = static_cast<uint8_t *>(malloc((uris[i].size() + 1) * sizeof(uint8_t)));
-        memcpy(flist->strings[i], uris[i].data(), uris[i].size() + 1);
+        flist->strings[i] = (uint8_t *)GHOST_URL_decode_alloc(uris[i].c_str());
       }
 
+      CLOG_INFO(LOG, 2, "drop_read_uris_fn file_count=%d", flist->count);
       const wl_fixed_t scale = win->scale();
       system->pushEvent(new GHOST_EventDragnDrop(system->getMilliSeconds(),
                                                  GHOST_kEventDraggingDropDone,
@@ -1263,12 +1278,13 @@ static void data_device_handle_drop(void *data, struct wl_data_device * /*wl_dat
     else if (ELEM(mime_receive, mime_text_plain, mime_text_utf8)) {
       /* TODO: enable use of internal functions 'txt_insert_buf' and
        * 'text_update_edited' to behave like dropped text was pasted. */
+      CLOG_INFO(LOG, 2, "drop_read_uris_fn (text_plain, text_utf8), unhandled!");
     }
     wl_display_roundtrip(system->display());
   };
 
   /* Pass in `input->focus_dnd` instead of accessing it from `input` since the leave callback
-   * (#data_device_leave) will clear the value once this function starts. */
+   * (#data_device_handle_leave) will clear the value once this function starts. */
   std::thread read_thread(read_uris_fn, input, data_offer, input->focus_dnd, mime_receive);
   read_thread.detach();
 }
@@ -1580,13 +1596,38 @@ static void pointer_handle_button(void *data,
   }
 }
 
-static void pointer_handle_axis(void *data,
+static void pointer_handle_axis(void * /*data*/,
                                 struct wl_pointer * /*wl_pointer*/,
                                 const uint32_t /*time*/,
                                 const uint32_t axis,
                                 const wl_fixed_t value)
 {
   CLOG_INFO(LOG, 2, "axis (axis=%u, value=%d)", axis, value);
+}
+
+static void pointer_handle_frame(void * /*data*/, struct wl_pointer * /*wl_pointer*/)
+{
+  CLOG_INFO(LOG, 2, "frame");
+}
+static void pointer_handle_axis_source(void * /*data*/,
+                                       struct wl_pointer * /*wl_pointer*/,
+                                       uint32_t axis_source)
+{
+  CLOG_INFO(LOG, 2, "axis_source (axis_source=%u)", axis_source);
+}
+static void pointer_handle_axis_stop(void * /*data*/,
+                                     struct wl_pointer * /*wl_pointer*/,
+                                     uint32_t /*time*/,
+                                     uint32_t axis)
+{
+  CLOG_INFO(LOG, 2, "axis_stop (axis=%u)", axis);
+}
+static void pointer_handle_axis_discrete(void *data,
+                                         struct wl_pointer * /*wl_pointer*/,
+                                         uint32_t axis,
+                                         int32_t discrete)
+{
+  CLOG_INFO(LOG, 2, "axis_discrete (axis=%u, discrete=%d)", axis, discrete);
 
   input_t *input = static_cast<input_t *>(data);
   if (axis != WL_POINTER_AXIS_VERTICAL_SCROLL) {
@@ -1596,7 +1637,7 @@ static void pointer_handle_axis(void *data,
   if (wl_surface *focus_surface = input->pointer.wl_surface) {
     GHOST_WindowWayland *win = ghost_wl_surface_user_data(focus_surface);
     input->system->pushEvent(new GHOST_EventWheel(
-        input->system->getMilliSeconds(), win, std::signbit(value) ? +1 : -1));
+        input->system->getMilliSeconds(), win, std::signbit(discrete) ? +1 : -1));
   }
 }
 
@@ -1606,6 +1647,10 @@ static const struct wl_pointer_listener pointer_listener = {
     pointer_handle_motion,
     pointer_handle_button,
     pointer_handle_axis,
+    pointer_handle_frame,
+    pointer_handle_axis_source,
+    pointer_handle_axis_stop,
+    pointer_handle_axis_discrete,
 };
 
 #undef LOG
@@ -2744,7 +2789,7 @@ static void global_handle_add(void *data,
     input->xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
     input->data_source = new data_source_t;
     input->wl_seat = static_cast<wl_seat *>(
-        wl_registry_bind(wl_registry, name, &wl_seat_interface, 4));
+        wl_registry_bind(wl_registry, name, &wl_seat_interface, 5));
     display->inputs.push_back(input);
     wl_seat_add_listener(input->wl_seat, &seat_listener, input);
   }
@@ -3852,7 +3897,7 @@ bool GHOST_SystemWayland::window_cursor_grab_set(const GHOST_TGrabCursorMode mod
       input->relative_pointer = nullptr;
     }
     if (input->locked_pointer) {
-      /* Potentially add a motion event so the applicate has updated X/Y coordinates. */
+      /* Potentially add a motion event so the application has updated X/Y coordinates. */
       int32_t xy_motion[2] = {0, 0};
       bool xy_motion_create_event = false;
 

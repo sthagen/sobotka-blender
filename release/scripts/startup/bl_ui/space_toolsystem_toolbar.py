@@ -1889,7 +1889,7 @@ class _defs_image_uv_sculpt:
                 if brush is None:
                     return
                 radius = brush.size
-            draw_circle_2d(xy, (1.0,) * 4, radius, segments=32)
+            draw_circle_2d(xy, (1.0,) * 4, radius)
 
         return generate_from_enum_ex(
             context,
@@ -3174,15 +3174,16 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
         'SCULPT_CURVES': [
             _defs_curves_sculpt.selection_paint,
             None,
-            _defs_curves_sculpt.comb,
             _defs_curves_sculpt.add,
             _defs_curves_sculpt.delete,
+            _defs_curves_sculpt.density,
+            None,
+            _defs_curves_sculpt.comb,
             _defs_curves_sculpt.snake_hook,
             _defs_curves_sculpt.grow_shrink,
             _defs_curves_sculpt.pinch,
-            _defs_curves_sculpt.smooth,
             _defs_curves_sculpt.puff,
-            _defs_curves_sculpt.density,
+            _defs_curves_sculpt.smooth,
             _defs_curves_sculpt.slide,
             None,
             *_tools_annotate,

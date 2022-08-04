@@ -19,7 +19,10 @@
 
 #include "BKE_DerivedMesh.h"
 #include "BKE_crazyspace.h"
+#include "BKE_crazyspace.hh"
+#include "BKE_curves.hh"
 #include "BKE_editmesh.h"
+#include "BKE_geometry_set.hh"
 #include "BKE_lib_id.h"
 #include "BKE_mesh.h"
 #include "BKE_mesh_wrapper.h"
@@ -70,7 +73,7 @@ static void set_crazy_vertex_quat(float r_quat[4],
 static bool modifiers_disable_subsurf_temporary(struct Scene *scene, Object *ob)
 {
   bool disabled = false;
-  int cageIndex = BKE_modifiers_get_cage_index(scene, ob, nullptr, 1);
+  int cageIndex = BKE_modifiers_get_cage_index(scene, ob, nullptr, true);
 
   ModifierData *md = static_cast<ModifierData *>(ob->modifiers.first);
   for (int i = 0; md && i <= cageIndex; i++, md = md->next) {
@@ -93,7 +96,7 @@ float (*BKE_crazyspace_get_mapped_editverts(struct Depsgraph *depsgraph, Object 
 
   /* disable subsurf temporal, get mapped cos, and enable it */
   if (modifiers_disable_subsurf_temporary(scene_eval, obedit_eval)) {
-    /* need to make new derivemesh */
+    /* Need to make new derived-mesh. */
     makeDerivedMesh(depsgraph, scene_eval, obedit_eval, &CD_MASK_BAREMESH);
   }
 
@@ -238,7 +241,7 @@ int BKE_crazyspace_get_first_deform_matrices_editbmesh(struct Depsgraph *depsgra
   Mesh *me_input = static_cast<Mesh *>(ob->data);
   Mesh *me = nullptr;
   int i, a, modifiers_left_num = 0, verts_num = 0;
-  int cageIndex = BKE_modifiers_get_cage_index(scene, ob, nullptr, 1);
+  int cageIndex = BKE_modifiers_get_cage_index(scene, ob, nullptr, true);
   float(*defmats)[3][3] = nullptr, (*deformedVerts)[3] = nullptr;
   VirtualModifierData virtualModifierData;
   ModifierEvalContext mectx = {depsgraph, ob, ModifierApplyFlag(0)};
@@ -359,7 +362,7 @@ int BKE_sculpt_get_first_deform_matrices(struct Depsgraph *depsgraph,
   VirtualModifierData virtualModifierData;
   Object object_eval;
   crazyspace_init_object_for_eval(depsgraph, object, &object_eval);
-  MultiresModifierData *mmd = get_multires_modifier(scene, &object_eval, 0);
+  MultiresModifierData *mmd = get_multires_modifier(scene, &object_eval, false);
   const bool is_sculpt_mode = (object->mode & OB_MODE_SCULPT) != 0;
   const bool has_multires = mmd != nullptr && mmd->sculptlvl > 0;
   const ModifierEvalContext mectx = {depsgraph, &object_eval, ModifierApplyFlag(0)};
@@ -586,3 +589,64 @@ void BKE_crazyspace_api_eval_clear(Object *object)
 }
 
 /** \} */
+
+namespace blender::bke::crazyspace {
+
+GeometryDeformation get_evaluated_curves_deformation(const Depsgraph &depsgraph,
+                                                     const Object &ob_orig)
+{
+  BLI_assert(ob_orig.type == OB_CURVES);
+  const Curves &curves_id_orig = *static_cast<const Curves *>(ob_orig.data);
+  const CurvesGeometry &curves_orig = CurvesGeometry::wrap(curves_id_orig.geometry);
+  const int points_num = curves_orig.points_num();
+
+  GeometryDeformation deformation;
+  /* Use the undeformed positions by default. */
+  deformation.positions = curves_orig.positions();
+
+  const Object *ob_eval = DEG_get_evaluated_object(&depsgraph, const_cast<Object *>(&ob_orig));
+  if (ob_eval == nullptr) {
+    return deformation;
+  }
+  const GeometrySet *geometry_eval = ob_eval->runtime.geometry_set_eval;
+  if (geometry_eval == nullptr) {
+    return deformation;
+  }
+
+  /* If available, use deformation information generated during evaluation. */
+  const GeometryComponentEditData *edit_component_eval =
+      geometry_eval->get_component_for_read<GeometryComponentEditData>();
+  bool uses_extra_positions = false;
+  if (edit_component_eval != nullptr) {
+    const CurvesEditHints *edit_hints = edit_component_eval->curves_edit_hints_.get();
+    if (edit_hints != nullptr && &edit_hints->curves_id_orig == &curves_id_orig) {
+      if (edit_hints->positions.has_value()) {
+        BLI_assert(edit_hints->positions->size() == points_num);
+        deformation.positions = *edit_hints->positions;
+        uses_extra_positions = true;
+      }
+      if (edit_hints->deform_mats.has_value()) {
+        BLI_assert(edit_hints->deform_mats->size() == points_num);
+        deformation.deform_mats = *edit_hints->deform_mats;
+      }
+    }
+  }
+
+  /* Use the positions of the evaluated curves directly, if the number of points matches. */
+  if (!uses_extra_positions) {
+    const CurveComponent *curves_component_eval =
+        geometry_eval->get_component_for_read<CurveComponent>();
+    if (curves_component_eval != nullptr) {
+      const Curves *curves_id_eval = curves_component_eval->get_for_read();
+      if (curves_id_eval != nullptr) {
+        const CurvesGeometry &curves_eval = CurvesGeometry::wrap(curves_id_eval->geometry);
+        if (curves_eval.points_num() == points_num) {
+          deformation.positions = curves_eval.positions();
+        }
+      }
+    }
+  }
+  return deformation;
+}
+
+}  // namespace blender::bke::crazyspace
