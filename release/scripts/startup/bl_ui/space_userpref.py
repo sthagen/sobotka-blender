@@ -5,8 +5,10 @@ from bpy.types import (
     Menu,
     Panel,
 )
-from bpy.app.translations import pgettext_iface as iface_
-from bpy.app.translations import contexts as i18n_contexts
+from bpy.app.translations import (
+    contexts as i18n_contexts,
+    pgettext_iface as iface_,
+)
 
 
 # -----------------------------------------------------------------------------
@@ -2258,6 +2260,7 @@ class USERPREF_PT_experimental_new_features(ExperimentalPanel, Panel):
                 ({"property": "use_sculpt_tools_tilt"}, "T82877"),
                 ({"property": "use_extended_asset_browser"}, ("project/view/130/", "Project Page")),
                 ({"property": "use_override_templates"}, ("T73318", "Milestone 4")),
+                ({"property": "use_realtime_compositor"}, "T99210"),
             ),
         )
 

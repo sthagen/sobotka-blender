@@ -20,7 +20,7 @@ struct MVert;
 /* UvVertMap */
 #define STD_UV_CONNECT_LIMIT 0.0001f
 
-/* Map from uv vertex to face. Used by select linked, uv subsurf and obj exporter. */
+/* Map from uv vertex to face. Used by select linked, uv subdivision-surface and obj exporter. */
 typedef struct UvVertMap {
   struct UvMapVert **vert;
   struct UvMapVert *buf;
@@ -68,13 +68,20 @@ typedef struct UvElementMap {
   /** Total number of unique UVs. */
   int total_unique_uvs;
 
-  /* If Non-NULL, address UvElements by `BM_elem_index_get(BMVert*)`. */
+  /** If Non-NULL, address UvElements by `BM_elem_index_get(BMVert*)`. */
   struct UvElement **vertex;
 
-  /* Number of Islands in the mesh */
-  int totalIslands;
-  /* Stores the starting index in buf where each island begins */
-  int *islandIndices;
+  /** If Non-NULL, pointer to local head of each unique UV. */
+  struct UvElement **head_table;
+
+  /** Number of islands, or zero if not calculated. */
+  int total_islands;
+  /** Array of starting index in #storage where each island begins. */
+  int *island_indices;
+  /** Array of number of UVs in each island. */
+  int *island_total_uvs;
+  /** Array of number of unique UVs in each island. */
+  int *island_total_unique_uvs;
 } UvElementMap;
 
 /* Connectivity data */
@@ -85,6 +92,7 @@ typedef struct MeshElemMap {
 
 /* mapping */
 UvVertMap *BKE_mesh_uv_vert_map_create(const struct MPoly *mpoly,
+                                       const bool *hide_poly,
                                        const struct MLoop *mloop,
                                        const struct MLoopUV *mloopuv,
                                        unsigned int totpoly,
