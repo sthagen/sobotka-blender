@@ -70,7 +70,7 @@
 #include "tree/tree_element_seq.hh"
 #include "tree/tree_iterator.hh"
 
-using namespace blender::ed::outliner;
+namespace blender::ed::outliner {
 
 /* -------------------------------------------------------------------- */
 /** \name Internal Utilities
@@ -191,7 +191,8 @@ void outliner_item_mode_toggle(bContext *C,
     Base *base = BKE_view_layer_base_find(tvc->view_layer, ob);
 
     /* Hidden objects can be removed from the mode. */
-    if (!base || (!(base->flag & BASE_VISIBLE_DEPSGRAPH) && (ob->mode != tvc->obact->mode))) {
+    if (!base || (!(base->flag & BASE_ENABLED_AND_MAYBE_VISIBLE_IN_VIEWPORT) &&
+                  (ob->mode != tvc->obact->mode))) {
       return;
     }
 
@@ -237,11 +238,9 @@ static void do_outliner_object_select_recursive(ViewLayer *view_layer,
                                                 Object *ob_parent,
                                                 bool select)
 {
-  Base *base;
-
-  for (base = static_cast<Base *>(FIRSTBASE(view_layer)); base; base = base->next) {
+  LISTBASE_FOREACH (Base *, base, &view_layer->object_bases) {
     Object *ob = base->object;
-    if ((((base->flag & BASE_VISIBLE_DEPSGRAPH) != 0) &&
+    if ((((base->flag & BASE_ENABLED_AND_MAYBE_VISIBLE_IN_VIEWPORT) != 0) &&
          BKE_object_is_child_recursive(ob_parent, ob))) {
       ED_object_base_select(base, select ? BA_SELECT : BA_DESELECT);
     }
@@ -301,7 +300,7 @@ static void tree_element_object_activate(bContext *C,
       ob = (Object *)parent_tselem->id;
 
       /* Don't return when activating children of the previous active object. */
-      if (ob == OBACT(view_layer) && set == OL_SETSEL_NONE) {
+      if (ob == BKE_view_layer_active_object_get(view_layer) && set == OL_SETSEL_NONE) {
         return;
       }
     }
@@ -321,7 +320,7 @@ static void tree_element_object_activate(bContext *C,
 
   if (scene->toolsettings->object_flag & SCE_OBJECT_MODE_LOCK) {
     if (base != nullptr) {
-      Object *obact = OBACT(view_layer);
+      Object *obact = BKE_view_layer_active_object_get(view_layer);
       const eObjectMode object_mode = obact ? (eObjectMode)obact->mode : OB_MODE_OBJECT;
       if (base && !BKE_object_is_mode_compat(base->object, object_mode)) {
         if (object_mode == OB_MODE_OBJECT) {
@@ -388,7 +387,8 @@ static void tree_element_material_activate(bContext *C, ViewLayer *view_layer, T
   /* we search for the object parent */
   Object *ob = (Object *)outliner_search_back(te, ID_OB);
   /* Note : ob->matbits can be nullptr when a local object points to a library mesh. */
-  if (ob == nullptr || ob != OBACT(view_layer) || ob->matbits == nullptr) {
+  if (ob == nullptr || ob != BKE_view_layer_active_object_get(view_layer) ||
+      ob->matbits == nullptr) {
     return; /* just paranoia */
   }
 
@@ -544,7 +544,7 @@ static void tree_element_bone_activate(bContext *C,
   Bone *bone = static_cast<Bone *>(te->directdata);
 
   if (!(bone->flag & BONE_HIDDEN_P)) {
-    Object *ob = OBACT(view_layer);
+    Object *ob = BKE_view_layer_active_object_get(view_layer);
     if (ob) {
       if (set != OL_SETSEL_EXTEND) {
         /* single select forces all other bones to get unselected */
@@ -844,7 +844,7 @@ static eOLDrawState tree_element_defgroup_state_get(const ViewLayer *view_layer,
                                                     const TreeStoreElem *tselem)
 {
   const Object *ob = (const Object *)tselem->id;
-  if (ob == OBACT(view_layer)) {
+  if (ob == BKE_view_layer_active_object_get(view_layer)) {
     if (BKE_object_defgroup_active_index_get(ob) == te->index + 1) {
       return OL_DRAWSEL_NORMAL;
     }
@@ -858,7 +858,7 @@ static eOLDrawState tree_element_bone_state_get(const ViewLayer *view_layer,
 {
   const bArmature *arm = (const bArmature *)tselem->id;
   const Bone *bone = static_cast<Bone *>(te->directdata);
-  const Object *ob = OBACT(view_layer);
+  const Object *ob = BKE_view_layer_active_object_get(view_layer);
   if (ob && ob->data == arm) {
     if (bone->flag & BONE_SELECTED) {
       return OL_DRAWSEL_NORMAL;
@@ -943,7 +943,7 @@ static eOLDrawState tree_element_posegroup_state_get(const ViewLayer *view_layer
 {
   const Object *ob = (const Object *)tselem->id;
 
-  if (ob == OBACT(view_layer) && ob->pose) {
+  if (ob == BKE_view_layer_active_object_get(view_layer) && ob->pose) {
     if (ob->pose->active_group == te->index + 1) {
       return OL_DRAWSEL_NORMAL;
     }
@@ -1009,7 +1009,8 @@ static eOLDrawState tree_element_active_material_get(const ViewLayer *view_layer
   /* we search for the object parent */
   const Object *ob = (const Object *)outliner_search_back((TreeElement *)te, ID_OB);
   /* Note : ob->matbits can be nullptr when a local object points to a library mesh. */
-  if (ob == nullptr || ob != OBACT(view_layer) || ob->matbits == nullptr) {
+  if (ob == nullptr || ob != BKE_view_layer_active_object_get(view_layer) ||
+      ob->matbits == nullptr) {
     return OL_DRAWSEL_NONE; /* just paranoia */
   }
 
@@ -1570,7 +1571,7 @@ static bool outliner_is_co_within_active_mode_column(bContext *C,
                                                      const float view_mval[2])
 {
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  Object *obact = OBACT(view_layer);
+  Object *obact = BKE_view_layer_active_object_get(view_layer);
 
   return outliner_is_co_within_mode_column(space_outliner, view_mval) && obact &&
          obact->mode != OB_MODE_OBJECT;
@@ -2040,3 +2041,5 @@ void OUTLINER_OT_select_walk(wmOperatorType *ot)
 }
 
 /** \} */
+
+}  // namespace blender::ed::outliner

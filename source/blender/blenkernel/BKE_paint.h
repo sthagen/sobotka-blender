@@ -60,10 +60,10 @@ struct bContext;
 struct bToolRef;
 struct tPaletteColorHSV;
 
-extern const char PAINT_CURSOR_SCULPT[3];
-extern const char PAINT_CURSOR_VERTEX_PAINT[3];
-extern const char PAINT_CURSOR_WEIGHT_PAINT[3];
-extern const char PAINT_CURSOR_TEXTURE_PAINT[3];
+extern const uchar PAINT_CURSOR_SCULPT[3];
+extern const uchar PAINT_CURSOR_VERTEX_PAINT[3];
+extern const uchar PAINT_CURSOR_WEIGHT_PAINT[3];
+extern const uchar PAINT_CURSOR_TEXTURE_PAINT[3];
 
 typedef enum ePaintMode {
   PAINT_MODE_SCULPT = 0,
@@ -98,6 +98,7 @@ typedef enum ePaintOverlayControlFlags {
   PAINT_OVERLAY_OVERRIDE_PRIMARY = (1 << 5),
   PAINT_OVERLAY_OVERRIDE_SECONDARY = (1 << 6),
 } ePaintOverlayControlFlags;
+ENUM_OPERATORS(ePaintOverlayControlFlags, PAINT_OVERLAY_OVERRIDE_SECONDARY);
 
 #define PAINT_OVERRIDE_MASK \
   (PAINT_OVERLAY_OVERRIDE_SECONDARY | PAINT_OVERLAY_OVERRIDE_PRIMARY | \
@@ -157,7 +158,7 @@ struct PaintCurve *BKE_paint_curve_add(struct Main *bmain, const char *name);
  * Call when entering each respective paint mode.
  */
 bool BKE_paint_ensure(struct ToolSettings *ts, struct Paint **r_paint);
-void BKE_paint_init(struct Main *bmain, struct Scene *sce, ePaintMode mode, const char col[3]);
+void BKE_paint_init(struct Main *bmain, struct Scene *sce, ePaintMode mode, const uchar col[3]);
 void BKE_paint_free(struct Paint *p);
 /**
  * Called when copying scene settings, so even if 'src' and 'tar' are the same still do a
@@ -401,7 +402,7 @@ typedef struct SculptBoundaryEditInfo {
   int original_vertex_i;
 
   /* How many steps were needed to reach this vertex from the boundary. */
-  int num_propagation_steps;
+  int propagation_steps_num;
 
   /* Strength that is used to deform this vertex. */
   float strength_factor;
@@ -415,10 +416,10 @@ typedef struct SculptBoundaryPreviewEdge {
 
 typedef struct SculptBoundary {
   /* Vertex indices of the active boundary. */
-  PBVHVertRef *vertices;
-  int *vertices_i;
-  int vertices_capacity;
-  int num_vertices;
+  PBVHVertRef *verts;
+  int *verts_i;
+  int verts_capacity;
+  int verts_num;
 
   /* Distance from a vertex in the boundary to initial vertex indexed by vertex index, taking into
    * account the length of all edges between them. Any vertex that is not in the boundary will have
@@ -428,7 +429,7 @@ typedef struct SculptBoundary {
   /* Data for drawing the preview. */
   SculptBoundaryPreviewEdge *edges;
   int edges_capacity;
-  int num_edges;
+  int edges_num;
 
   /* True if the boundary loops into itself. */
   bool forms_loop;
@@ -499,8 +500,8 @@ typedef struct SculptSession {
 
   /* These are always assigned to base mesh data when using PBVH_FACES and PBVH_GRIDS. */
   struct MVert *mvert;
-  struct MPoly *mpoly;
-  struct MLoop *mloop;
+  const struct MPoly *mpoly;
+  const struct MLoop *mloop;
 
   /* These contain the vertex and poly counts of the final mesh. */
   int totvert, totpoly;

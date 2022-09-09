@@ -245,8 +245,8 @@ void BKE_layer_collection_set_flag(struct LayerCollection *lc, int flag, bool va
 
 /**
  * Applies object's restrict flags on top of flags coming from the collection
- * and stores those in `base->flag`. #BASE_VISIBLE_DEPSGRAPH ignores viewport flags visibility
- * (i.e., restriction and local collection).
+ * and stores those in `base->flag`. #BASE_ENABLED_AND_MAYBE_VISIBLE_IN_VIEWPORT ignores viewport
+ * flags visibility (i.e., restriction and local collection).
  */
 void BKE_base_eval_flags(struct Base *base);
 
@@ -543,6 +543,8 @@ struct Object **BKE_view_layer_array_from_objects_in_mode_unique_data(struct Vie
                                                                       const struct View3D *v3d,
                                                                       uint *r_len,
                                                                       eObjectMode mode);
+struct Object *BKE_view_layer_active_object_get(const struct ViewLayer *view_layer);
+struct Object *BKE_view_layer_edit_object_get(const struct ViewLayer *view_layer);
 
 struct ViewLayerAOV *BKE_view_layer_add_aov(struct ViewLayer *view_layer);
 void BKE_view_layer_remove_aov(struct ViewLayer *view_layer, struct ViewLayerAOV *aov);
