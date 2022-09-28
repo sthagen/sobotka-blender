@@ -730,7 +730,7 @@ typedef struct EdgeQueue {
 
   const float *view_normal;
 #ifdef USE_EDGEQUEUE_FRONTFACE
-  unsigned int use_view_normal : 1;
+  uint use_view_normal : 1;
 #endif
 } EdgeQueue;
 
@@ -883,7 +883,7 @@ static void long_edge_queue_edge_add_recursive(
     return;
   }
 
-  if ((l_edge->radial_next != l_edge)) {
+  if (l_edge->radial_next != l_edge) {
     /* How much longer we need to be to consider for subdividing
      * (avoids subdividing faces which are only *slightly* skinny) */
 #  define EVEN_EDGELEN_THRESHOLD 1.2f
@@ -2005,7 +2005,7 @@ bool BKE_pbvh_bmesh_update_topology(PBVH *pbvh,
     BLI_mempool_destroy(queue_pool);
   }
 
-  /* Unmark nodes */
+  /* Unmark nodes. */
   for (int n = 0; n < pbvh->totnode; n++) {
     PBVHNode *node = &pbvh->nodes[n];
 

@@ -234,8 +234,7 @@ void pbvh_grow_nodes(PBVH *pbvh, int totnode)
 
 /* Add a vertex to the map, with a positive value for unique vertices and
  * a negative value for additional vertices */
-static int map_insert_vert(
-    PBVH *pbvh, GHash *map, unsigned int *face_verts, unsigned int *uniq_verts, int vertex)
+static int map_insert_vert(PBVH *pbvh, GHash *map, uint *face_verts, uint *uniq_verts, int vertex)
 {
   void *key, **value_p;
 
@@ -1023,7 +1022,7 @@ static void pbvh_update_normals_accum_task_cb(void *__restrict userdata,
   float(*vnors)[3] = data->vnors;
 
   if (node->flag & PBVH_UpdateNormals) {
-    unsigned int mpoly_prev = UINT_MAX;
+    uint mpoly_prev = UINT_MAX;
     float fn[3];
 
     const int *faces = node->prim_indices;
@@ -1031,7 +1030,7 @@ static void pbvh_update_normals_accum_task_cb(void *__restrict userdata,
 
     for (int i = 0; i < totface; i++) {
       const MLoopTri *lt = &pbvh->looptri[faces[i]];
-      const unsigned int vtri[3] = {
+      const uint vtri[3] = {
           pbvh->mloop[lt->tri[0]].v,
           pbvh->mloop[lt->tri[1]].v,
           pbvh->mloop[lt->tri[2]].v,
@@ -1326,16 +1325,17 @@ static void pbvh_update_draw_buffer_cb(void *__restrict userdata,
       case PBVH_FACES: {
         /* Pass vertices separately because they may be not be the same as the mesh's vertices,
          * and pass normals separately because they are managed by the PBVH. */
-        GPU_pbvh_mesh_buffers_update(pbvh->vbo_id,
-                                     node->draw_buffers,
-                                     pbvh->mesh,
-                                     pbvh->verts,
-                                     CustomData_get_layer(pbvh->vdata, CD_PAINT_MASK),
-                                     CustomData_get_layer(pbvh->pdata, CD_SCULPT_FACE_SETS),
-                                     pbvh->face_sets_color_seed,
-                                     pbvh->face_sets_color_default,
-                                     update_flags,
-                                     pbvh->vert_normals);
+        GPU_pbvh_mesh_buffers_update(
+            pbvh->vbo_id,
+            node->draw_buffers,
+            pbvh->mesh,
+            pbvh->verts,
+            CustomData_get_layer(pbvh->vdata, CD_PAINT_MASK),
+            CustomData_get_layer_named(pbvh->pdata, CD_PROP_INT32, ".sculpt_face_set"),
+            pbvh->face_sets_color_seed,
+            pbvh->face_sets_color_default,
+            update_flags,
+            pbvh->vert_normals);
         break;
       }
       case PBVH_BMESH:
@@ -2167,8 +2167,8 @@ bool ray_face_intersection_tri(const float ray_start[3],
                                float *depth)
 {
   float depth_test;
-  if ((isect_ray_tri_watertight_v3(ray_start, isect_precalc, t0, t1, t2, &depth_test, NULL) &&
-       (depth_test < *depth))) {
+  if (isect_ray_tri_watertight_v3(ray_start, isect_precalc, t0, t1, t2, &depth_test, NULL) &&
+      (depth_test < *depth)) {
     *depth = depth_test;
     return true;
   }
@@ -2213,12 +2213,12 @@ bool ray_face_nearest_quad(const float ray_start[3],
   float dist_sq_test;
   float co[3], depth_test;
 
-  if (((dist_sq_test = dist_squared_ray_to_tri_v3_fast(
-            ray_start, ray_normal, t0, t1, t2, co, &depth_test)) < *dist_sq)) {
+  if ((dist_sq_test = dist_squared_ray_to_tri_v3_fast(
+           ray_start, ray_normal, t0, t1, t2, co, &depth_test)) < *dist_sq) {
     *dist_sq = dist_sq_test;
     *depth = depth_test;
-    if (((dist_sq_test = dist_squared_ray_to_tri_v3_fast(
-              ray_start, ray_normal, t0, t2, t3, co, &depth_test)) < *dist_sq)) {
+    if ((dist_sq_test = dist_squared_ray_to_tri_v3_fast(
+             ray_start, ray_normal, t0, t2, t3, co, &depth_test)) < *dist_sq) {
       *dist_sq = dist_sq_test;
       *depth = depth_test;
     }
@@ -2239,8 +2239,8 @@ bool ray_face_nearest_tri(const float ray_start[3],
   float dist_sq_test;
   float co[3], depth_test;
 
-  if (((dist_sq_test = dist_squared_ray_to_tri_v3_fast(
-            ray_start, ray_normal, t0, t1, t2, co, &depth_test)) < *dist_sq)) {
+  if ((dist_sq_test = dist_squared_ray_to_tri_v3_fast(
+           ray_start, ray_normal, t0, t1, t2, co, &depth_test)) < *dist_sq) {
     *dist_sq = dist_sq_test;
     *depth = depth_test;
     return true;
@@ -3135,9 +3135,9 @@ bool pbvh_has_face_sets(PBVH *pbvh)
 {
   switch (pbvh->header.type) {
     case PBVH_GRIDS:
-      return (pbvh->pdata && CustomData_get_layer(pbvh->pdata, CD_SCULPT_FACE_SETS));
     case PBVH_FACES:
-      return (pbvh->pdata && CustomData_get_layer(pbvh->pdata, CD_SCULPT_FACE_SETS));
+      return pbvh->pdata &&
+             CustomData_get_layer_named(pbvh->pdata, CD_PROP_INT32, ".sculpt_face_set") != NULL;
     case PBVH_BMESH:
       return false;
   }

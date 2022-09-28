@@ -12,8 +12,10 @@
 /* XXX(@campbellbarton): temp feature. */
 #define DURIAN_CAMERA_SWITCH
 
-/* check for cyclic set-scene,
- * libs can cause this case which is normally prevented, see (T#####) */
+/**
+ * Check for cyclic set-scene.
+ * Libraries can cause this case which is normally prevented, see (T42009).
+ */
 #define USE_SETSCENE_CHECK
 
 #include "DNA_ID.h"
@@ -401,7 +403,7 @@ typedef struct ImageFormatData {
 
   /** R_IMF_PLANES_BW, R_IMF_PLANES_RGB, R_IMF_PLANES_RGBA. */
   char planes;
-  /** Generic options for all image types, alpha zbuffer. */
+  /** Generic options for all image types, alpha Z-buffer. */
   char flag;
 
   /** (0 - 100), eg: JPEG quality. */

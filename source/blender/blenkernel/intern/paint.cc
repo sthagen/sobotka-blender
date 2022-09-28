@@ -1315,13 +1315,22 @@ void paint_update_brush_rake_rotation(UnifiedPaintSettings *ups, Brush *brush, f
   }
 }
 
+static bool paint_rake_rotation_active(const MTex &mtex)
+{
+  return mtex.tex && mtex.brush_angle_mode & MTEX_ANGLE_RAKE;
+}
+
+static bool paint_rake_rotation_active(const Brush &brush)
+{
+  return paint_rake_rotation_active(brush.mtex) || paint_rake_rotation_active(brush.mask_mtex);
+}
+
 bool paint_calculate_rake_rotation(UnifiedPaintSettings *ups,
                                    Brush *brush,
                                    const float mouse_pos[2])
 {
   bool ok = false;
-  if ((brush->mtex.brush_angle_mode & MTEX_ANGLE_RAKE) ||
-      (brush->mask_mtex.brush_angle_mode & MTEX_ANGLE_RAKE)) {
+  if (paint_rake_rotation_active(*brush)) {
     const float r = RAKE_THRESHHOLD;
     float rotation;
 
@@ -1730,7 +1739,8 @@ static void sculpt_update_object(
 
   /* Sculpt Face Sets. */
   if (use_face_sets) {
-    ss->face_sets = static_cast<int *>(CustomData_get_layer(&me->pdata, CD_SCULPT_FACE_SETS));
+    ss->face_sets = static_cast<int *>(
+        CustomData_get_layer_named(&me->pdata, CD_PROP_INT32, ".sculpt_face_set"));
   }
   else {
     ss->face_sets = nullptr;
@@ -1957,22 +1967,17 @@ int *BKE_sculpt_face_sets_ensure(Mesh *mesh)
 {
   using namespace blender;
   using namespace blender::bke;
-  if (CustomData_has_layer(&mesh->pdata, CD_SCULPT_FACE_SETS)) {
-    return static_cast<int *>(CustomData_get_layer(&mesh->pdata, CD_SCULPT_FACE_SETS));
+  MutableAttributeAccessor attributes = mesh->attributes_for_write();
+  if (!attributes.contains(".sculpt_face_set")) {
+    SpanAttributeWriter<int> face_sets = attributes.lookup_or_add_for_write_only_span<int>(
+        ".sculpt_face_set", ATTR_DOMAIN_FACE);
+    face_sets.span.fill(1);
+    mesh->face_sets_color_default = 1;
+    face_sets.finish();
   }
 
-  const AttributeAccessor attributes = mesh->attributes_for_write();
-  const VArray<bool> hide_poly = attributes.lookup_or_default<bool>(
-      ".hide_poly", ATTR_DOMAIN_FACE, false);
-
-  MutableSpan<int> face_sets = {
-      static_cast<int *>(CustomData_add_layer(
-          &mesh->pdata, CD_SCULPT_FACE_SETS, CD_CONSTRUCT, nullptr, mesh->totpoly)),
-      mesh->totpoly};
-
-  face_sets.fill(1);
-  mesh->face_sets_color_default = 1;
-  return face_sets.data();
+  return static_cast<int *>(
+      CustomData_get_layer_named(&mesh->pdata, CD_PROP_INT32, ".sculpt_face_set"));
 }
 
 bool *BKE_sculpt_hide_poly_ensure(Mesh *mesh)
@@ -2026,7 +2031,7 @@ int BKE_sculpt_mask_layers_ensure(Object *ob, MultiresModifierData *mmd)
           const MLoop *l = &loops[p->loopstart + j];
           avg += paint_mask[l->v];
         }
-        avg /= (float)p->totloop;
+        avg /= float(p->totloop);
 
         /* fill in multires mask corner */
         for (j = 0; j < p->totloop; j++) {
@@ -2548,12 +2553,10 @@ static bool sculpt_attr_update(Object *ob, SculptAttribute *attr)
 
     if (cdata) {
       int layer_index = CustomData_get_named_layer_index(cdata, attr->proptype, attr->name);
+      bad = layer_index == -1;
 
-      if (layer_index != -1 && attr->data_for_bmesh) {
+      if (ss->bm) {
         attr->bmesh_cd_offset = cdata->layers[layer_index].offset;
-      }
-      else {
-        bad = true;
       }
     }
   }
@@ -2635,7 +2638,10 @@ SculptAttribute *BKE_sculpt_attribute_get(struct Object *ob,
   SculptAttribute *attr = sculpt_get_cached_layer(ss, domain, proptype, name);
 
   if (attr) {
-    sculpt_attr_update(ob, attr);
+    if (sculpt_attr_update(ob, attr)) {
+      sculpt_attribute_update_refs(ob);
+    }
+
     return attr;
   }
 
