@@ -17,7 +17,7 @@ struct Object;
 struct ParticleSystem;
 struct Scene;
 struct ViewerPath;
-struct GeomerySet;
+struct GeometrySet;
 
 /* ---------------------------------------------------- */
 /* Dupli-Geometry */
@@ -63,6 +63,14 @@ typedef struct DupliObject {
   /* Random ID for shading */
   unsigned int random_id;
 } DupliObject;
+
+/** Look up the RGBA value of a uniform shader attribute.
+ *  \return true if the attribute was found; if not, r_value is also set to zero. */
+bool BKE_object_dupli_find_rgba_attribute(struct Object *ob,
+                                          struct DupliObject *dupli,
+                                          struct Object *dupli_parent,
+                                          const char *name,
+                                          float r_value[4]);
 
 #ifdef __cplusplus
 }

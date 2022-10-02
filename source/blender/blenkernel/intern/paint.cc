@@ -2079,6 +2079,14 @@ void BKE_sculpt_toolsettings_data_ensure(Scene *scene)
     sd->constant_detail = 3.0f;
   }
 
+  if (!sd->automasking_start_normal_limit) {
+    sd->automasking_start_normal_limit = 20.0f / 180.0f * M_PI;
+    sd->automasking_start_normal_falloff = 0.25f;
+
+    sd->automasking_view_normal_limit = 90.0f / 180.0f * M_PI;
+    sd->automasking_view_normal_falloff = 0.25f;
+  }
+
   /* Set sane default tiling offsets. */
   if (!sd->paint.tile_offset[0]) {
     sd->paint.tile_offset[0] = 1.0f;
@@ -2088,6 +2096,9 @@ void BKE_sculpt_toolsettings_data_ensure(Scene *scene)
   }
   if (!sd->paint.tile_offset[2]) {
     sd->paint.tile_offset[2] = 1.0f;
+  }
+  if (!sd->automasking_cavity_curve || !sd->automasking_cavity_curve_op) {
+    BKE_sculpt_check_cavity_curves(sd);
   }
 }
 
@@ -2229,7 +2240,8 @@ static PBVH *build_pbvh_from_ccg(Object *ob, SubdivCCG *subdiv_ccg, bool respect
                        &key,
                        (void **)subdiv_ccg->grid_faces,
                        subdiv_ccg->grid_flag_mats,
-                       subdiv_ccg->grid_hidden);
+                       subdiv_ccg->grid_hidden,
+                       base_mesh);
   pbvh_show_mask_set(pbvh, ob->sculpt->show_mask);
   pbvh_show_face_sets_set(pbvh, ob->sculpt->show_face_sets);
   return pbvh;

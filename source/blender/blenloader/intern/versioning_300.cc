@@ -1757,7 +1757,7 @@ static void versioning_replace_legacy_mix_rgb_node(bNodeTree *ntree)
       node->type = SH_NODE_MIX;
       NodeShaderMix *data = (NodeShaderMix *)MEM_callocN(sizeof(NodeShaderMix), __func__);
       data->blend_type = node->custom1;
-      data->clamp_result = node->custom2;
+      data->clamp_result = (node->custom2 & SHD_MIXRGB_CLAMP) ? 1 : 0;
       data->clamp_factor = 1;
       data->data_type = SOCK_RGBA;
       data->factor_mode = NODE_MIX_MODE_UNIFORM;
@@ -3034,9 +3034,9 @@ void blo_do_versions_300(FileData *fd, Library *UNUSED(lib), Main *bmain)
             gpmd->factor *= 2.0f;
           }
           else {
-            gpmd->step = 1 + (int)(gpmd->factor * max_ff(0.0f,
-                                                         min_ff(5.1f * sqrtf(gpmd->step) - 3.0f,
-                                                                gpmd->step + 2.0f)));
+            gpmd->step = 1 + int(gpmd->factor * max_ff(0.0f,
+                                                       min_ff(5.1f * sqrtf(gpmd->step) - 3.0f,
+                                                              gpmd->step + 2.0f)));
             gpmd->factor = 1.0f;
           }
         }
@@ -3337,6 +3337,14 @@ void blo_do_versions_300(FileData *fd, Library *UNUSED(lib), Main *bmain)
     }
   }
 
+  if (!DNA_struct_elem_find(fd->filesdna, "Sculpt", "float", "automasking_cavity_factor")) {
+    LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
+      if (scene->toolsettings && scene->toolsettings->sculpt) {
+        scene->toolsettings->sculpt->automasking_cavity_factor = 0.5f;
+      }
+    }
+  }
+
   if (!MAIN_VERSION_ATLEAST(bmain, 302, 14)) {
     /* Compensate for previously wrong squared distance. */
     LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
@@ -3519,6 +3527,7 @@ void blo_do_versions_300(FileData *fd, Library *UNUSED(lib), Main *bmain)
 
     BKE_main_namemap_validate_and_fix(bmain);
   }
+
   if (!MAIN_VERSION_ATLEAST(bmain, 304, 1)) {
     /* Image generation information transferred to tiles. */
     if (!DNA_struct_elem_find(fd->filesdna, "ImageTile", "int", "gen_x")) {
@@ -3573,6 +3582,13 @@ void blo_do_versions_300(FileData *fd, Library *UNUSED(lib), Main *bmain)
       }
     }
     FOREACH_NODETREE_END;
+  }
+
+  if (!MAIN_VERSION_ATLEAST(bmain, 304, 2)) {
+    /* Initialize brush curves sculpt settings. */
+    LISTBASE_FOREACH (Brush *, brush, &bmain->brushes) {
+      brush->automasking_cavity_factor = 0.5f;
+    }
   }
 
   /**
