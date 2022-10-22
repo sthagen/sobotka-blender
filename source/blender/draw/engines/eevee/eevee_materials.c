@@ -759,7 +759,8 @@ BLI_INLINE Material *eevee_object_material_get(Object *ob, int slot, bool holdou
 BLI_INLINE EeveeMaterialCache eevee_material_cache_get(
     EEVEE_Data *vedata, EEVEE_ViewLayerData *sldata, Object *ob, int slot, bool is_hair)
 {
-  const bool holdout = (ob->base_flag & BASE_HOLDOUT) != 0;
+  const bool holdout = ((ob->base_flag & BASE_HOLDOUT) != 0) ||
+                       ((ob->visibility_flag & OB_HOLDOUT) != 0);
   EeveeMaterialCache matcache;
   Material *ma = eevee_object_material_get(ob, slot, holdout);
   switch (ma->blend_method) {
@@ -923,17 +924,14 @@ void EEVEE_particle_hair_cache_populate(EEVEE_Data *vedata,
         if (matcache.depth_grp) {
           *matcache.depth_grp_p = DRW_shgroup_hair_create_sub(
               ob, psys, md, matcache.depth_grp, NULL);
-          DRW_shgroup_add_material_resources(*matcache.depth_grp_p, matcache.shading_gpumat);
         }
         if (matcache.shading_grp) {
           *matcache.shading_grp_p = DRW_shgroup_hair_create_sub(
               ob, psys, md, matcache.shading_grp, matcache.shading_gpumat);
-          DRW_shgroup_add_material_resources(*matcache.shading_grp_p, matcache.shading_gpumat);
         }
         if (matcache.shadow_grp) {
           *matcache.shadow_grp_p = DRW_shgroup_hair_create_sub(
               ob, psys, md, matcache.shadow_grp, NULL);
-          DRW_shgroup_add_material_resources(*matcache.shadow_grp_p, matcache.shading_gpumat);
           *cast_shadow = true;
         }
 
@@ -953,16 +951,13 @@ void EEVEE_object_curves_cache_populate(EEVEE_Data *vedata,
 
   if (matcache.depth_grp) {
     *matcache.depth_grp_p = DRW_shgroup_curves_create_sub(ob, matcache.depth_grp, NULL);
-    DRW_shgroup_add_material_resources(*matcache.depth_grp_p, matcache.shading_gpumat);
   }
   if (matcache.shading_grp) {
     *matcache.shading_grp_p = DRW_shgroup_curves_create_sub(
         ob, matcache.shading_grp, matcache.shading_gpumat);
-    DRW_shgroup_add_material_resources(*matcache.shading_grp_p, matcache.shading_gpumat);
   }
   if (matcache.shadow_grp) {
     *matcache.shadow_grp_p = DRW_shgroup_curves_create_sub(ob, matcache.shadow_grp, NULL);
-    DRW_shgroup_add_material_resources(*matcache.shadow_grp_p, matcache.shading_gpumat);
     *cast_shadow = true;
   }
 
