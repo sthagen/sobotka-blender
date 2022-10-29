@@ -370,10 +370,10 @@ static void translate_snap_target_grid_ensure(TransInfo *t)
 }
 
 static void translate_snap_grid_apply(TransInfo *t,
-                            const int max_index,
-                            const float grid_dist[3],
-                            const float loc[3],
-                            float r_out[3])
+                                      const int max_index,
+                                      const float grid_dist[3],
+                                      const float loc[3],
+                                      float r_out[3])
 {
   BLI_assert(max_index <= 2);
   translate_snap_target_grid_ensure(t);
@@ -686,8 +686,8 @@ void initTranslation(TransInfo *t)
   t->num.flag = 0;
   t->num.idx_max = t->idx_max;
 
-  t->snap[0] = 1.0;
-  t->snap[1] = t->snap_spatial_precision;
+  t->snap[0] = t->snap_spatial[0];
+  t->snap[1] = t->snap_spatial[0] * t->snap_spatial_precision;
 
   copy_v3_fl(t->num.val_inc, t->snap[0]);
   t->num.unit_sys = t->scene->unit.system;
