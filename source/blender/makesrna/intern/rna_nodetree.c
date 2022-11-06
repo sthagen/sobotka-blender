@@ -4500,8 +4500,11 @@ static void rna_NodeConvertColorSpace_to_color_space_set(struct PointerRNA *ptr,
 }
 
 static const EnumPropertyItem *rna_NodeConvertColorSpace_color_space_itemf(
-    bContext *UNUSED(C), PointerRNA *UNUSED(ptr), PropertyRNA *UNUSED(prop), bool *r_free)
+    bContext *C, PointerRNA *UNUSED(ptr), PropertyRNA *UNUSED(prop), bool *r_free)
 {
+  if (C == NULL) {
+    return rna_enum_color_space_convert_default_items;
+  }
   EnumPropertyItem *items = NULL;
   int totitem = 0;
 
@@ -7323,19 +7326,9 @@ static void def_cmp_convert_color_space(StructRNA *srna)
   PropertyRNA *prop;
   RNA_def_struct_sdna_from(srna, "NodeConvertColorSpace", "storage");
 
-  static const EnumPropertyItem color_space_items[] = {
-      {0,
-       "NONE",
-       0,
-       "None",
-       "Do not perform any color transform on load, treat colors as in scene linear space "
-       "already"},
-      {0, NULL, 0, NULL, NULL},
-  };
-
   prop = RNA_def_property(srna, "from_color_space", PROP_ENUM, PROP_NONE);
   RNA_def_property_flag(prop, PROP_ENUM_NO_CONTEXT);
-  RNA_def_property_enum_items(prop, color_space_items);
+  RNA_def_property_enum_items(prop, rna_enum_color_space_convert_default_items);
   RNA_def_property_enum_funcs(prop,
                               "rna_NodeConvertColorSpace_from_color_space_get",
                               "rna_NodeConvertColorSpace_from_color_space_set",
@@ -7345,7 +7338,7 @@ static void def_cmp_convert_color_space(StructRNA *srna)
 
   prop = RNA_def_property(srna, "to_color_space", PROP_ENUM, PROP_NONE);
   RNA_def_property_flag(prop, PROP_ENUM_NO_CONTEXT);
-  RNA_def_property_enum_items(prop, color_space_items);
+  RNA_def_property_enum_items(prop, rna_enum_color_space_convert_default_items);
   RNA_def_property_enum_funcs(prop,
                               "rna_NodeConvertColorSpace_to_color_space_get",
                               "rna_NodeConvertColorSpace_to_color_space_set",
@@ -9442,9 +9435,25 @@ static void def_geo_curve_sample(StructRNA *srna)
 
   RNA_def_struct_sdna_from(srna, "NodeGeometryCurveSample", "storage");
 
-  PropertyRNA *prop = RNA_def_property(srna, "mode", PROP_ENUM, PROP_NONE);
+  PropertyRNA *prop;
+  prop = RNA_def_property(srna, "mode", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_items(prop, mode_items);
   RNA_def_property_ui_text(prop, "Mode", "Method for sampling input");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_socket_update");
+
+  prop = RNA_def_property(srna, "use_all_curves", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_ui_text(prop,
+                           "All Curves",
+                           "Sample lengths based on the total lengh of all curves, rather than "
+                           "using a length inside each selected curve");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_socket_update");
+
+  prop = RNA_def_property(srna, "data_type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, rna_enum_attribute_type_items);
+  RNA_def_property_enum_funcs(
+      prop, NULL, NULL, "rna_GeometryNodeAttributeType_type_with_socket_itemf");
+  RNA_def_property_enum_default(prop, CD_PROP_FLOAT);
+  RNA_def_property_ui_text(prop, "Data Type", "");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_socket_update");
 }
 
