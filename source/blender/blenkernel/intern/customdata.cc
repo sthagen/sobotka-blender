@@ -2799,7 +2799,11 @@ static CustomDataLayer *customData_add_layer__internal(CustomData *data,
   const LayerTypeInfo *typeInfo = layerType_getInfo(type);
   int flag = 0;
 
+  /* Some layer types only support a single layer. */
   if (!typeInfo->defaultname && CustomData_has_layer(data, type)) {
+    /* This function doesn't support dealing with existing layer data for these layer types when
+     * the layer already exists. */
+    BLI_assert(layerdata == nullptr);
     return &data->layers[CustomData_get_layer_index(data, type)];
   }
 
