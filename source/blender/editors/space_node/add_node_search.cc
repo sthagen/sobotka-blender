@@ -2,14 +2,15 @@
 
 #include <optional>
 
+#include "AS_asset_catalog.hh"
+#include "AS_asset_library.hh"
+
 #include "BLI_listbase.h"
 #include "BLI_string_search.h"
 
 #include "DNA_space_types.h"
 
 #include "BKE_asset.h"
-#include "BKE_asset_catalog.hh"
-#include "BKE_asset_library.hh"
 #include "BKE_context.h"
 #include "BKE_idprop.h"
 #include "BKE_lib_id.h"
@@ -256,7 +257,7 @@ static void add_node_search_exec_fn(bContext *C, void *arg1, void *arg2)
   }
 
   new_node->locx = storage.cursor.x / UI_DPI_FAC;
-  new_node->locy = storage.cursor.y / UI_DPI_FAC + 20 * UI_DPI_FAC;
+  new_node->locy = storage.cursor.y / UI_DPI_FAC + 20;
 
   nodeSetSelected(new_node, true);
   nodeSetActive(&node_tree, new_node);

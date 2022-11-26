@@ -43,7 +43,7 @@ using blender::MutableSpan;
 using blender::short2;
 using blender::Span;
 
-#define DEBUG_TIME
+// #define DEBUG_TIME
 
 #ifdef DEBUG_TIME
 #  include "BLI_timeit.hh"
@@ -128,13 +128,13 @@ float (*BKE_mesh_poly_normals_for_write(Mesh *mesh))[3]
 void BKE_mesh_vertex_normals_clear_dirty(Mesh *mesh)
 {
   mesh->runtime->vert_normals_dirty = false;
-  BKE_mesh_assert_normals_dirty_or_calculated(mesh);
+  BLI_assert(mesh->runtime->vert_normals || mesh->totvert == 0);
 }
 
 void BKE_mesh_poly_normals_clear_dirty(Mesh *mesh)
 {
   mesh->runtime->poly_normals_dirty = false;
-  BKE_mesh_assert_normals_dirty_or_calculated(mesh);
+  BLI_assert(mesh->runtime->poly_normals || mesh->totpoly == 0);
 }
 
 bool BKE_mesh_vertex_normals_are_dirty(const Mesh *mesh)
@@ -147,30 +147,118 @@ bool BKE_mesh_poly_normals_are_dirty(const Mesh *mesh)
   return mesh->runtime->poly_normals_dirty;
 }
 
-void BKE_mesh_clear_derived_normals(Mesh *mesh)
-{
-  MEM_SAFE_FREE(mesh->runtime->vert_normals);
-  MEM_SAFE_FREE(mesh->runtime->poly_normals);
-
-  mesh->runtime->vert_normals_dirty = true;
-  mesh->runtime->poly_normals_dirty = true;
-}
-
-void BKE_mesh_assert_normals_dirty_or_calculated(const Mesh *mesh)
-{
-  if (!mesh->runtime->vert_normals_dirty) {
-    BLI_assert(mesh->runtime->vert_normals || mesh->totvert == 0);
-  }
-  if (!mesh->runtime->poly_normals_dirty) {
-    BLI_assert(mesh->runtime->poly_normals || mesh->totpoly == 0);
-  }
-}
-
 /** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Mesh Normal Calculation (Polygons)
  * \{ */
+
+/*
+ * COMPUTE POLY NORMAL
+ *
+ * Computes the normal of a planar
+ * polygon See Graphics Gems for
+ * computing newell normal.
+ */
+static void mesh_calc_ngon_normal(const MPoly *mpoly,
+                                  const MLoop *loopstart,
+                                  const MVert *mvert,
+                                  float normal[3])
+{
+  const int nverts = mpoly->totloop;
+  const float *v_prev = mvert[loopstart[nverts - 1].v].co;
+  const float *v_curr;
+
+  zero_v3(normal);
+
+  /* Newell's Method */
+  for (int i = 0; i < nverts; i++) {
+    v_curr = mvert[loopstart[i].v].co;
+    add_newell_cross_v3_v3v3(normal, v_prev, v_curr);
+    v_prev = v_curr;
+  }
+
+  if (UNLIKELY(normalize_v3(normal) == 0.0f)) {
+    normal[2] = 1.0f; /* other axis set to 0.0 */
+  }
+}
+
+void BKE_mesh_calc_poly_normal(const MPoly *mpoly,
+                               const MLoop *loopstart,
+                               const MVert *mvarray,
+                               float r_no[3])
+{
+  if (mpoly->totloop > 4) {
+    mesh_calc_ngon_normal(mpoly, loopstart, mvarray, r_no);
+  }
+  else if (mpoly->totloop == 3) {
+    normal_tri_v3(
+        r_no, mvarray[loopstart[0].v].co, mvarray[loopstart[1].v].co, mvarray[loopstart[2].v].co);
+  }
+  else if (mpoly->totloop == 4) {
+    normal_quad_v3(r_no,
+                   mvarray[loopstart[0].v].co,
+                   mvarray[loopstart[1].v].co,
+                   mvarray[loopstart[2].v].co,
+                   mvarray[loopstart[3].v].co);
+  }
+  else { /* horrible, two sided face! */
+    r_no[0] = 0.0;
+    r_no[1] = 0.0;
+    r_no[2] = 1.0;
+  }
+}
+/* duplicate of function above _but_ takes coords rather than mverts */
+static void mesh_calc_ngon_normal_coords(const MPoly *mpoly,
+                                         const MLoop *loopstart,
+                                         const float (*vertex_coords)[3],
+                                         float r_normal[3])
+{
+  const int nverts = mpoly->totloop;
+  const float *v_prev = vertex_coords[loopstart[nverts - 1].v];
+  const float *v_curr;
+
+  zero_v3(r_normal);
+
+  /* Newell's Method */
+  for (int i = 0; i < nverts; i++) {
+    v_curr = vertex_coords[loopstart[i].v];
+    add_newell_cross_v3_v3v3(r_normal, v_prev, v_curr);
+    v_prev = v_curr;
+  }
+
+  if (UNLIKELY(normalize_v3(r_normal) == 0.0f)) {
+    r_normal[2] = 1.0f; /* other axis set to 0.0 */
+  }
+}
+
+void BKE_mesh_calc_poly_normal_coords(const MPoly *mpoly,
+                                      const MLoop *loopstart,
+                                      const float (*vertex_coords)[3],
+                                      float r_no[3])
+{
+  if (mpoly->totloop > 4) {
+    mesh_calc_ngon_normal_coords(mpoly, loopstart, vertex_coords, r_no);
+  }
+  else if (mpoly->totloop == 3) {
+    normal_tri_v3(r_no,
+                  vertex_coords[loopstart[0].v],
+                  vertex_coords[loopstart[1].v],
+                  vertex_coords[loopstart[2].v]);
+  }
+  else if (mpoly->totloop == 4) {
+    normal_quad_v3(r_no,
+                   vertex_coords[loopstart[0].v],
+                   vertex_coords[loopstart[1].v],
+                   vertex_coords[loopstart[2].v],
+                   vertex_coords[loopstart[3].v]);
+  }
+  else { /* horrible, two sided face! */
+    r_no[0] = 0.0;
+    r_no[1] = 0.0;
+    r_no[2] = 1.0;
+  }
+}
 
 struct MeshCalcNormalsData_Poly {
   const MVert *mvert;
@@ -463,60 +551,6 @@ void BKE_mesh_calc_normals(Mesh *mesh)
   BKE_mesh_vertex_normals_ensure(mesh);
 }
 
-void BKE_mesh_calc_normals_looptri(const MVert *mverts,
-                                   int numVerts,
-                                   const MLoop *mloop,
-                                   const MLoopTri *looptri,
-                                   int looptri_num,
-                                   float (*r_tri_nors)[3])
-{
-  float(*tnorms)[3] = (float(*)[3])MEM_calloc_arrayN(size_t(numVerts), sizeof(*tnorms), "tnorms");
-  float(*fnors)[3] = (r_tri_nors) ? r_tri_nors :
-                                    (float(*)[3])MEM_calloc_arrayN(
-                                        size_t(looptri_num), sizeof(*fnors), "meshnormals");
-
-  if (!tnorms || !fnors) {
-    goto cleanup;
-  }
-
-  for (int i = 0; i < looptri_num; i++) {
-    const MLoopTri *lt = &looptri[i];
-    float *f_no = fnors[i];
-    const uint vtri[3] = {
-        mloop[lt->tri[0]].v,
-        mloop[lt->tri[1]].v,
-        mloop[lt->tri[2]].v,
-    };
-
-    normal_tri_v3(f_no, mverts[vtri[0]].co, mverts[vtri[1]].co, mverts[vtri[2]].co);
-
-    accumulate_vertex_normals_tri_v3(tnorms[vtri[0]],
-                                     tnorms[vtri[1]],
-                                     tnorms[vtri[2]],
-                                     f_no,
-                                     mverts[vtri[0]].co,
-                                     mverts[vtri[1]].co,
-                                     mverts[vtri[2]].co);
-  }
-
-  /* Following Mesh convention; we use vertex coordinate itself for normal in this case. */
-  for (int i = 0; i < numVerts; i++) {
-    const MVert *mv = &mverts[i];
-    float *no = tnorms[i];
-
-    if (UNLIKELY(normalize_v3(no) == 0.0f)) {
-      normalize_v3_v3(no, mv->co);
-    }
-  }
-
-cleanup:
-  MEM_freeN(tnorms);
-
-  if (fnors != r_tri_nors) {
-    MEM_freeN(fnors);
-  }
-}
-
 void BKE_lnor_spacearr_init(MLoopNorSpaceArray *lnors_spacearr,
                             const int numLoops,
                             const char data_type)
@@ -693,7 +727,7 @@ MINLINE short unit_float_to_short(const float val)
   return short(floorf(val * float(SHRT_MAX) + 0.5f));
 }
 
-void BKE_lnor_space_custom_data_to_normal(MLoopNorSpace *lnor_space,
+void BKE_lnor_space_custom_data_to_normal(const MLoopNorSpace *lnor_space,
                                           const short clnor_data[2],
                                           float r_custom_lnor[3])
 {
@@ -727,7 +761,7 @@ void BKE_lnor_space_custom_data_to_normal(MLoopNorSpace *lnor_space,
   }
 }
 
-void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space,
+void BKE_lnor_space_custom_normal_to_data(const MLoopNorSpace *lnor_space,
                                           const float custom_lnor[3],
                                           short r_clnor_data[2])
 {

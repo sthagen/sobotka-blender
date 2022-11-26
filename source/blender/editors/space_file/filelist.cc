@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <optional>
 #include <sys/stat.h>
 
 #ifndef WIN32
@@ -19,6 +20,11 @@
 #  include <direct.h>
 #  include <io.h>
 #endif
+
+#include "AS_asset_library.h"
+#include "AS_asset_library.hh"
+#include "AS_asset_representation.hh"
+
 #include "MEM_guardedalloc.h"
 
 #include "BLF_api.h"
@@ -42,9 +48,6 @@
 #endif
 
 #include "BKE_asset.h"
-#include "BKE_asset_library.h"
-#include "BKE_asset_library.hh"
-#include "BKE_asset_representation.hh"
 #include "BKE_context.h"
 #include "BKE_global.h"
 #include "BKE_icons.h"
@@ -117,7 +120,7 @@ struct FileListInternEntry {
   } local_data;
 
   /* References an asset in the asset library storage. */
-  bke::AssetRepresentation *asset; /* Non-owning. */
+  asset_system::AssetRepresentation *asset; /* Non-owning. */
 
   /* See #FILE_ENTRY_BLENDERLIB_NO_PREVIEW. */
   bool blenderlib_has_no_preview;
@@ -213,7 +216,7 @@ struct FileList {
   eFileSelectType type;
   /* The library this list was created for. Stored here so we know when to re-read. */
   AssetLibraryReference *asset_library_ref;
-  bke::AssetLibrary *asset_library; /* Non-owning. */
+  asset_system::AssetLibrary *asset_library; /* Non-owning. */
 
   short flags;
 
@@ -3114,11 +3117,15 @@ static int filelist_readjob_list_lib_populate_from_index(FileList *filelist,
   return read_from_index + navigate_to_parent_len;
 }
 
-static int filelist_readjob_list_lib(FileList *filelist,
-                                     const char *root,
-                                     ListBase *entries,
-                                     const ListLibOptions options,
-                                     FileIndexer *indexer_runtime)
+/**
+ * \return The number of entries found if the \a root path points to a valid library file.
+ *         Otherwise returns no value (#std::nullopt).
+ */
+static std::optional<int> filelist_readjob_list_lib(FileList *filelist,
+                                                    const char *root,
+                                                    ListBase *entries,
+                                                    const ListLibOptions options,
+                                                    FileIndexer *indexer_runtime)
 {
   BLI_assert(indexer_runtime);
 
@@ -3133,7 +3140,7 @@ static int filelist_readjob_list_lib(FileList *filelist,
    * call it directly from `filelist_readjob_do` to increase readability. */
   const bool is_lib = BLO_library_path_explode(root, dir, &group, nullptr);
   if (!is_lib) {
-    return 0;
+    return std::nullopt;
   }
 
   const bool group_came_from_path = group != nullptr;
@@ -3164,7 +3171,7 @@ static int filelist_readjob_list_lib(FileList *filelist,
   BlendFileReadReport bf_reports{};
   libfiledata = BLO_blendhandle_from_file(dir, &bf_reports);
   if (libfiledata == nullptr) {
-    return 0;
+    return std::nullopt;
   }
 
   /* Add current parent when requested. */
@@ -3555,14 +3562,15 @@ static void filelist_readjob_recursive_dir_add_items(const bool do_lib,
       if (filelist->asset_library_ref) {
         list_lib_options |= LIST_LIB_ASSETS_ONLY;
       }
-      entries_num = filelist_readjob_list_lib(
+      std::optional<int> lib_entries_num = filelist_readjob_list_lib(
           filelist, subdir, &entries, list_lib_options, &indexer_runtime);
-      if (entries_num > 0) {
+      if (lib_entries_num) {
         is_lib = true;
+        entries_num += *lib_entries_num;
       }
     }
 
-    if (!is_lib) {
+    if (!is_lib && BLI_is_dir(subdir)) {
       entries_num = filelist_readjob_list_dir(
           subdir, &entries, filter_glob, do_lib, job_params->main_name, skip_currpar);
     }
@@ -3672,8 +3680,8 @@ static void filelist_readjob_load_asset_library_data(FileListReadJob *job_params
 
   /* Load asset catalogs, into the temp filelist for thread-safety.
    * #filelist_readjob_endjob() will move it into the real filelist. */
-  tmp_filelist->asset_library = BKE_asset_library_load(job_params->current_main,
-                                                       *job_params->filelist->asset_library_ref);
+  tmp_filelist->asset_library = AS_asset_library_load(job_params->current_main,
+                                                      *job_params->filelist->asset_library_ref);
   *do_update = true;
 }
 

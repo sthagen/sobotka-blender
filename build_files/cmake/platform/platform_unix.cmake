@@ -108,6 +108,10 @@ find_package_wrapper(ZLIB REQUIRED)
 find_package_wrapper(Zstd REQUIRED)
 find_package_wrapper(Epoxy REQUIRED)
 
+if(WITH_VULKAN_BACKEND)
+  find_package_wrapper(Vulkan REQUIRED)
+endif()
+
 function(check_freetype_for_brotli)
   include(CheckSymbolExists)
   set(CMAKE_REQUIRED_INCLUDES ${FREETYPE_INCLUDE_DIRS})
@@ -322,9 +326,10 @@ if(WITH_CYCLES AND WITH_CYCLES_DEVICE_ONEAPI)
   file(GLOB _sycl_runtime_libraries
     ${SYCL_ROOT_DIR}/lib/libsycl.so
     ${SYCL_ROOT_DIR}/lib/libsycl.so.*
-    ${SYCL_ROOT_DIR}/lib/libpi_level_zero.so
+    ${SYCL_ROOT_DIR}/lib/libpi_*.so
   )
   list(FILTER _sycl_runtime_libraries EXCLUDE REGEX ".*\.py")
+  list(REMOVE_ITEM _sycl_runtime_libraries "${SYCL_ROOT_DIR}/lib/libpi_opencl.so")
   list(APPEND PLATFORM_BUNDLED_LIBRARIES ${_sycl_runtime_libraries})
   unset(_sycl_runtime_libraries)
 endif()

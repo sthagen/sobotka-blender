@@ -24,6 +24,7 @@
 #include "BKE_main.h"
 #include "BKE_material.h"
 #include "BKE_node.h"
+#include "BKE_node_runtime.hh"
 #include "BKE_node_tree_update.h"
 #include "BKE_report.h"
 #include "BKE_scene.h"
@@ -98,7 +99,8 @@ float node_socket_calculate_height(const bNodeSocket &socket)
 {
   float sock_height = NODE_SOCKSIZE * NODE_SOCKSIZE_DRAW_MULIPLIER;
   if (socket.flag & SOCK_MULTI_INPUT) {
-    sock_height += max_ii(NODE_MULTI_INPUT_LINK_GAP * 0.5f * socket.total_inputs, NODE_SOCKSIZE);
+    sock_height += max_ii(NODE_MULTI_INPUT_LINK_GAP * 0.5f * socket.runtime->total_inputs,
+                          NODE_SOCKSIZE);
   }
   return sock_height;
 }
@@ -266,14 +268,14 @@ static void compo_startjob(void *cjv,
   cj->do_update = do_update;
   cj->progress = progress;
 
-  ntree->test_break = compo_breakjob;
-  ntree->tbh = cj;
-  ntree->stats_draw = compo_statsdrawjob;
-  ntree->sdh = cj;
-  ntree->progress = compo_progressjob;
-  ntree->prh = cj;
-  ntree->update_draw = compo_redrawjob;
-  ntree->udh = cj;
+  ntree->runtime->test_break = compo_breakjob;
+  ntree->runtime->tbh = cj;
+  ntree->runtime->stats_draw = compo_statsdrawjob;
+  ntree->runtime->sdh = cj;
+  ntree->runtime->progress = compo_progressjob;
+  ntree->runtime->prh = cj;
+  ntree->runtime->update_draw = compo_redrawjob;
+  ntree->runtime->udh = cj;
 
   // XXX BIF_store_spare();
   /* 1 is do_previews */
@@ -291,9 +293,9 @@ static void compo_startjob(void *cjv,
     }
   }
 
-  ntree->test_break = nullptr;
-  ntree->stats_draw = nullptr;
-  ntree->progress = nullptr;
+  ntree->runtime->test_break = nullptr;
+  ntree->runtime->stats_draw = nullptr;
+  ntree->runtime->progress = nullptr;
 }
 
 static void compo_canceljob(void *cjv)
@@ -503,6 +505,11 @@ void ED_node_shader_default(const bContext *C, ID *id)
 
     ma->nodetree = ntreeCopyTree(bmain, ma_default->nodetree);
     ma->nodetree->owner_id = &ma->id;
+    LISTBASE_FOREACH (bNode *, node_iter, &ma->nodetree->nodes) {
+      BLI_strncpy(node_iter->name, DATA_(node_iter->name), NODE_MAXSTR);
+      nodeUniqueName(ma->nodetree, node_iter);
+    }
+
     BKE_ntree_update_main_tree(bmain, ma->nodetree, nullptr);
   }
   else if (ELEM(GS(id->name), ID_WO, ID_LA)) {
@@ -920,7 +927,7 @@ static bool socket_is_occluded(const float2 &location,
     rctf socket_hitbox;
     const float socket_hitbox_radius = NODE_SOCKSIZE - 0.1f * U.widget_unit;
     BLI_rctf_init_pt_radius(&socket_hitbox, location, socket_hitbox_radius);
-    if (BLI_rctf_inside_rctf(&node->totr, &socket_hitbox)) {
+    if (BLI_rctf_inside_rctf(&node->runtime->totr, &socket_hitbox)) {
       return true;
     }
   }
@@ -1188,7 +1195,7 @@ void node_set_hidden_sockets(SpaceNode *snode, bNode *node, int set)
 static bool cursor_isect_multi_input_socket(const float2 &cursor, const bNodeSocket &socket)
 {
   const float node_socket_height = node_socket_calculate_height(socket);
-  const float2 location(socket.locx, socket.locy);
+  const float2 location(socket.runtime->locx, socket.runtime->locy);
   /* `.xmax = socket->locx + NODE_SOCKSIZE * 5.5f`
    * would be the same behavior as for regular sockets.
    * But keep it smaller because for multi-input socket you
@@ -1238,7 +1245,7 @@ bool node_find_indicated_socket(SpaceNode &snode,
     if (in_out & SOCK_IN) {
       LISTBASE_FOREACH (bNodeSocket *, sock, &node->inputs) {
         if (!nodeSocketIsHidden(sock)) {
-          const float2 location(sock->locx, sock->locy);
+          const float2 location(sock->runtime->locx, sock->runtime->locy);
           if (sock->flag & SOCK_MULTI_INPUT && !(node->flag & NODE_HIDDEN)) {
             if (cursor_isect_multi_input_socket(cursor, *sock)) {
               if (!socket_is_occluded(location, *node, snode)) {
@@ -1261,7 +1268,7 @@ bool node_find_indicated_socket(SpaceNode &snode,
     if (in_out & SOCK_OUT) {
       LISTBASE_FOREACH (bNodeSocket *, sock, &node->outputs) {
         if (!nodeSocketIsHidden(sock)) {
-          const float2 location(sock->locx, sock->locy);
+          const float2 location(sock->runtime->locx, sock->runtime->locy);
           if (BLI_rctf_isect_pt(&rect, location.x, location.y)) {
             if (!socket_is_occluded(location, *node, snode)) {
               *nodep = node;
@@ -1289,8 +1296,8 @@ float node_link_dim_factor(const View2D &v2d, const bNodeLink &link)
     return 1.0f;
   }
 
-  const float2 from(link.fromsock->locx, link.fromsock->locy);
-  const float2 to(link.tosock->locx, link.tosock->locy);
+  const float2 from(link.fromsock->runtime->locx, link.fromsock->runtime->locy);
+  const float2 to(link.tosock->runtime->locx, link.tosock->runtime->locy);
 
   const float min_endpoint_distance = std::min(
       std::max(BLI_rctf_length_x(&v2d.cur, from.x), BLI_rctf_length_y(&v2d.cur, from.y)),
@@ -1314,7 +1321,8 @@ bool node_link_is_hidden_or_dimmed(const View2D &v2d, const bNodeLink &link)
 /** \name Node Duplicate Operator
  * \{ */
 
-static void node_duplicate_reparent_recursive(const Map<const bNode *, bNode *> &node_map,
+static void node_duplicate_reparent_recursive(bNodeTree *ntree,
+                                              const Map<const bNode *, bNode *> &node_map,
                                               bNode *node)
 {
   bNode *parent;
@@ -1325,15 +1333,15 @@ static void node_duplicate_reparent_recursive(const Map<const bNode *, bNode *> 
   for (parent = node->parent; parent; parent = parent->parent) {
     if (parent->flag & SELECT) {
       if (!(parent->flag & NODE_TEST)) {
-        node_duplicate_reparent_recursive(node_map, parent);
+        node_duplicate_reparent_recursive(ntree, node_map, parent);
       }
       break;
     }
   }
   /* reparent node copy to parent copy */
   if (parent) {
-    nodeDetachNode(node_map.lookup(node));
-    nodeAttachNode(node_map.lookup(node), node_map.lookup(parent));
+    nodeDetachNode(ntree, node_map.lookup(node));
+    nodeAttachNode(ntree, node_map.lookup(node), node_map.lookup(parent));
   }
 }
 
@@ -1427,7 +1435,7 @@ static int node_duplicate_exec(bContext *C, wmOperator *op)
   /* reparent copied nodes */
   LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
     if ((node->flag & SELECT) && !(node->flag & NODE_TEST)) {
-      node_duplicate_reparent_recursive(node_map, node);
+      node_duplicate_reparent_recursive(ntree, node_map, node);
     }
 
     /* only has to check old nodes */
@@ -1930,7 +1938,7 @@ static int node_switch_view_exec(bContext *C, wmOperator * /*op*/)
   LISTBASE_FOREACH_MUTABLE (bNode *, node, &snode->edittree->nodes) {
     if (node->flag & SELECT) {
       /* call the update function from the Switch View node */
-      node->update = NODE_UPDATE_OPERATOR;
+      node->runtime->update = NODE_UPDATE_OPERATOR;
     }
   }
 
@@ -2237,7 +2245,6 @@ static int node_clipboard_copy_exec(bContext *C, wmOperator * /*op*/)
 
   /* clear current clipboard */
   BKE_node_clipboard_clear();
-  BKE_node_clipboard_init(ntree);
 
   Map<const bNode *, bNode *> node_map;
   Map<const bNodeSocket *, bNodeSocket *> socket_map;
@@ -2265,7 +2272,7 @@ static int node_clipboard_copy_exec(bContext *C, wmOperator * /*op*/)
         new_node->parent = node_map.lookup(new_node->parent);
       }
       else {
-        nodeDetachNode(new_node);
+        nodeDetachNode(ntree, new_node);
       }
     }
   }
@@ -2326,11 +2333,6 @@ static int node_clipboard_paste_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  if (BKE_node_clipboard_get_type() != ntree->type) {
-    BKE_report(op->reports, RPT_ERROR, "Clipboard nodes are an incompatible type");
-    return OPERATOR_CANCELLED;
-  }
-
   /* only warn */
   if (is_clipboard_valid == false) {
     BKE_report(op->reports,
@@ -2338,17 +2340,37 @@ static int node_clipboard_paste_exec(bContext *C, wmOperator *op)
                "Some nodes references could not be restored, will be left empty");
   }
 
-  /* make sure all clipboard nodes would be valid in the target tree */
-  bool all_nodes_valid = true;
+  ED_preview_kill_jobs(CTX_wm_manager(C), CTX_data_main(C));
+
+  /* deselect old nodes */
+  node_deselect_all(*snode);
+
+  /* calculate "barycenter" for placing on mouse cursor */
+  float2 center = {0.0f, 0.0f};
+  int num_nodes = 0;
+  LISTBASE_FOREACH_INDEX (bNode *, node, clipboard_nodes_lb, num_nodes) {
+    center.x += BLI_rctf_cent_x(&node->runtime->totr);
+    center.y += BLI_rctf_cent_y(&node->runtime->totr);
+  }
+  mul_v2_fl(center, 1.0 / num_nodes);
+
+  Map<const bNode *, bNode *> node_map;
+  Map<const bNodeSocket *, bNodeSocket *> socket_map;
+
+  /* copy valid nodes from clipboard */
   LISTBASE_FOREACH (bNode *, node, clipboard_nodes_lb) {
     const char *disabled_hint = nullptr;
-    if (!node->typeinfo->poll_instance ||
-        !node->typeinfo->poll_instance(node, ntree, &disabled_hint)) {
-      all_nodes_valid = false;
+    if (node->typeinfo->poll_instance &&
+        node->typeinfo->poll_instance(node, ntree, &disabled_hint)) {
+      bNode *new_node = bke::node_copy_with_mapping(
+          ntree, *node, LIB_ID_COPY_DEFAULT, true, socket_map);
+      node_map.add_new(node, new_node);
+    }
+    else {
       if (disabled_hint) {
         BKE_reportf(op->reports,
                     RPT_ERROR,
-                    "Cannot add node %s into node tree %s:\n  %s",
+                    "Cannot add node %s into node tree %s: %s",
                     node->name,
                     ntree->id.name + 2,
                     disabled_hint);
@@ -2361,33 +2383,6 @@ static int node_clipboard_paste_exec(bContext *C, wmOperator *op)
                     ntree->id.name + 2);
       }
     }
-  }
-  if (!all_nodes_valid) {
-    return OPERATOR_CANCELLED;
-  }
-
-  ED_preview_kill_jobs(CTX_wm_manager(C), CTX_data_main(C));
-
-  /* deselect old nodes */
-  node_deselect_all(*snode);
-
-  /* calculate "barycenter" for placing on mouse cursor */
-  float2 center = {0.0f, 0.0f};
-  int num_nodes = 0;
-  LISTBASE_FOREACH_INDEX (bNode *, node, clipboard_nodes_lb, num_nodes) {
-    center.x += BLI_rctf_cent_x(&node->totr);
-    center.y += BLI_rctf_cent_y(&node->totr);
-  }
-  mul_v2_fl(center, 1.0 / num_nodes);
-
-  Map<const bNode *, bNode *> node_map;
-  Map<const bNodeSocket *, bNodeSocket *> socket_map;
-
-  /* copy nodes from clipboard */
-  LISTBASE_FOREACH (bNode *, node, clipboard_nodes_lb) {
-    bNode *new_node = bke::node_copy_with_mapping(
-        ntree, *node, LIB_ID_COPY_DEFAULT, true, socket_map);
-    node_map.add_new(node, new_node);
   }
 
   for (bNode *new_node : node_map.values()) {
@@ -2402,15 +2397,19 @@ static int node_clipboard_paste_exec(bContext *C, wmOperator *op)
     }
   }
 
+  /* Add links between existing nodes. */
   LISTBASE_FOREACH (bNodeLink *, link, clipboard_links_lb) {
-    bNodeLink *new_link = nodeAddLink(ntree,
-                                      node_map.lookup(link->fromnode),
-                                      socket_map.lookup(link->fromsock),
-                                      node_map.lookup(link->tonode),
-                                      socket_map.lookup(link->tosock));
-    new_link->multi_input_socket_index = link->multi_input_socket_index;
+    const bNode *fromnode = link->fromnode;
+    const bNode *tonode = link->tonode;
+    if (node_map.lookup_key_ptr(fromnode) && node_map.lookup_key_ptr(tonode)) {
+      bNodeLink *new_link = nodeAddLink(ntree,
+                                        node_map.lookup(fromnode),
+                                        socket_map.lookup(link->fromsock),
+                                        node_map.lookup(tonode),
+                                        socket_map.lookup(link->tosock));
+      new_link->multi_input_socket_index = link->multi_input_socket_index;
+    }
   }
-
   ntree->ensure_topology_cache();
 
   for (bNode *new_node : node_map.values()) {
@@ -2798,13 +2797,13 @@ static bool node_shader_script_update_text_recursive(RenderEngine *engine,
 {
   bool found = false;
 
-  ntree->done = true;
+  ntree->runtime->done = true;
 
   /* update each script that is using this text datablock */
   LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
     if (node->type == NODE_GROUP) {
       bNodeTree *ngroup = (bNodeTree *)node->id;
-      if (ngroup && !ngroup->done) {
+      if (ngroup && !ngroup->runtime->done) {
         found |= node_shader_script_update_text_recursive(engine, type, ngroup, text);
       }
     }
@@ -2856,14 +2855,14 @@ static int node_shader_script_update_exec(bContext *C, wmOperator *op)
       /* clear flags for recursion check */
       FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
         if (ntree->type == NTREE_SHADER) {
-          ntree->done = false;
+          ntree->runtime->done = false;
         }
       }
       FOREACH_NODETREE_END;
 
       FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
         if (ntree->type == NTREE_SHADER) {
-          if (!ntree->done) {
+          if (!ntree->runtime->done) {
             found |= node_shader_script_update_text_recursive(engine, type, ntree, text);
           }
         }
