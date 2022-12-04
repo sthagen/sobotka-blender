@@ -113,7 +113,8 @@ static const char *get_shader_code(int shader_type)
     case SHADER_BUFFER_NORMALS_ACCUMULATE: {
       return datatoc_common_subdiv_normals_accumulate_comp_glsl;
     }
-    case SHADER_BUFFER_NORMALS_FINALIZE: {
+    case SHADER_BUFFER_NORMALS_FINALIZE:
+    case SHADER_BUFFER_CUSTOM_NORMALS_FINALIZE: {
       return datatoc_common_subdiv_normals_finalize_comp_glsl;
     }
     case SHADER_PATCH_EVALUATION:
@@ -289,11 +290,11 @@ static GPUShader *get_subdiv_shader(int shader_type)
     if (ELEM(shader_type,
              SHADER_BUFFER_LINES,
              SHADER_BUFFER_LNOR,
-             SHADER_BUFFER_TRIS,
+             SHADER_BUFFER_TRIS_MULTIPLE_MATERIALS,
              SHADER_BUFFER_UV_STRETCH_AREA)) {
       defines = "#define SUBDIV_POLYGON_OFFSET\n";
     }
-    else if (shader_type == SHADER_BUFFER_TRIS_MULTIPLE_MATERIALS) {
+    else if (shader_type == SHADER_BUFFER_TRIS) {
       defines =
           "#define SUBDIV_POLYGON_OFFSET\n"
           "#define SINGLE_MATERIAL\n";
@@ -1407,6 +1408,7 @@ static void drw_subdiv_compute_dispatch(const DRWSubdivCache *cache,
 }
 
 void draw_subdiv_extract_pos_nor(const DRWSubdivCache *cache,
+                                 GPUVertBuf *flags_buffer,
                                  GPUVertBuf *pos_nor,
                                  GPUVertBuf *orco)
 {
@@ -1459,6 +1461,10 @@ void draw_subdiv_extract_pos_nor(const DRWSubdivCache *cache,
   GPU_vertbuf_bind_as_ssbo(patch_arrays_buffer, binding_point++);
   GPU_vertbuf_bind_as_ssbo(patch_index_buffer, binding_point++);
   GPU_vertbuf_bind_as_ssbo(patch_param_buffer, binding_point++);
+  if (flags_buffer) {
+    GPU_vertbuf_bind_as_ssbo(flags_buffer, binding_point);
+  }
+  binding_point++;
   GPU_vertbuf_bind_as_ssbo(pos_nor, binding_point++);
   if (orco) {
     GPU_vertbuf_bind_as_ssbo(src_extra_buffer, binding_point++);
