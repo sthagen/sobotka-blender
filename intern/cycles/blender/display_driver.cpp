@@ -57,7 +57,6 @@ int BlenderDisplayShader::get_tex_coord_attrib_location()
 
 /* TODO move shaders to standalone .glsl file. */
 static const char *FALLBACK_VERTEX_SHADER =
-    "#version 330\n"
     "uniform vec2 fullscreen;\n"
     "in vec2 texCoord;\n"
     "in vec2 pos;\n"
@@ -75,7 +74,6 @@ static const char *FALLBACK_VERTEX_SHADER =
     "}\n\0";
 
 static const char *FALLBACK_FRAGMENT_SHADER =
-    "#version 330\n"
     "uniform sampler2D image_texture;\n"
     "in vec2 texCoord_interp;\n"
     "out vec4 fragColor;\n"
@@ -803,11 +801,16 @@ void BlenderDisplayDriver::draw(const Params &params)
   const int position_attribute = GPU_vertformat_attr_add(
       format, display_shader_->position_attribute_name, GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
 
-  /* Note: Shader is bound again through IMM to register this shader with the imm module
+  /* Note: Shader is bound again through IMM to register this shader with the IMM module
    * and perform required setup for IMM rendering. This is required as the IMM module
    * needs to be aware of which shader is bound, and the main display shader
    * is bound externally. */
   immBindShader(active_shader);
+
+  if (tiles_->current_tile.need_update_texture_pixels) {
+    update_tile_texture_pixels(tiles_->current_tile);
+    tiles_->current_tile.need_update_texture_pixels = false;
+  }
 
   draw_tile(zoom_, texcoord_attribute, position_attribute, tiles_->current_tile.tile);
 

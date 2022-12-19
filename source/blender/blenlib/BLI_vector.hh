@@ -410,7 +410,7 @@ class Vector {
    * Afterwards the vector has 0 elements and any allocated memory
    * will be freed.
    */
-  void clear_and_make_inline()
+  void clear_and_shrink()
   {
     destruct_n(begin_, this->size());
     if (!this->is_inline()) {
@@ -902,11 +902,11 @@ class Vector {
 
   std::reverse_iterator<const T *> rbegin() const
   {
-    return std::reverse_iterator<T *>(this->end());
+    return std::reverse_iterator<const T *>(this->end());
   }
   std::reverse_iterator<const T *> rend() const
   {
-    return std::reverse_iterator<T *>(this->begin());
+    return std::reverse_iterator<const T *>(this->begin());
   }
 
   /**

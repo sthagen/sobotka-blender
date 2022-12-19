@@ -508,9 +508,8 @@ float SCULPT_automasking_factor_get(AutomaskingCache *automasking,
 
   float mask = 1.0f;
 
-  /* Since brush normal mode depends on the current mirror symmery pass
-   * it is not folded into the factor cache (when it exists).
-   */
+  /* Since brush normal mode depends on the current mirror symmetry pass
+   * it is not folded into the factor cache (when it exists). */
   if ((ss->cache || ss->filter_cache) &&
       (automasking->settings.flags & BRUSH_AUTOMASKING_BRUSH_NORMAL)) {
     mask *= automasking_brush_normal_factor(automasking, ss, vert, automask_data);
@@ -775,7 +774,7 @@ static void sculpt_normal_occlusion_automasking_fill(AutomaskingCache *automaski
   SculptSession *ss = ob->sculpt;
   const int totvert = SCULPT_vertex_count_get(ss);
 
-  /* No need to build original data since this is only called at the beginning of strokes.*/
+  /* No need to build original data since this is only called at the beginning of strokes. */
   AutomaskingNodeData nodedata;
   nodedata.have_orig_data = false;
 

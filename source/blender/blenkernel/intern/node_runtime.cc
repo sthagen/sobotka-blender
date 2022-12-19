@@ -42,6 +42,13 @@ static void double_checked_lock_with_task_isolation(std::mutex &mutex,
   double_checked_lock(mutex, data_is_dirty, [&]() { threading::isolate_task(fn); });
 }
 
+static void update_interface_sockets(const bNodeTree &ntree)
+{
+  bNodeTreeRuntime &tree_runtime = *ntree.runtime;
+  tree_runtime.interface_inputs = ntree.inputs;
+  tree_runtime.interface_outputs = ntree.outputs;
+}
+
 static void update_node_vector(const bNodeTree &ntree)
 {
   bNodeTreeRuntime &tree_runtime = *ntree.runtime;
@@ -278,7 +285,7 @@ static void toposort_from_start_node(const ToposortDirection direction,
 
   Stack<Item, 64> nodes_to_check;
   nodes_to_check.push({&start_node});
-  node_states[start_node.runtime->index_in_tree].is_in_stack = true;
+  node_states[start_node.index()].is_in_stack = true;
   while (!nodes_to_check.is_empty()) {
     Item &item = nodes_to_check.peek();
     bNode &node = *item.node;
@@ -306,7 +313,7 @@ static void toposort_from_start_node(const ToposortDirection direction,
       }
       bNodeSocket &linked_socket = *socket.runtime->directly_linked_sockets[item.link_index];
       bNode &linked_node = *linked_socket.runtime->owner_node;
-      ToposortNodeState &linked_node_state = node_states[linked_node.runtime->index_in_tree];
+      ToposortNodeState &linked_node_state = node_states[linked_node.index()];
       if (linked_node_state.is_done) {
         /* The linked node has already been visited. */
         item.link_index++;
@@ -324,7 +331,7 @@ static void toposort_from_start_node(const ToposortDirection direction,
 
     /* If no other element has been pushed, the current node can be pushed to the sorted list. */
     if (&item == &nodes_to_check.peek()) {
-      ToposortNodeState &node_state = node_states[node.runtime->index_in_tree];
+      ToposortNodeState &node_state = node_states[node.index()];
       node_state.is_done = true;
       node_state.is_in_stack = false;
       r_sorted_nodes.append(&node);
@@ -345,7 +352,7 @@ static void update_toposort(const bNodeTree &ntree,
 
   Array<ToposortNodeState> node_states(tree_runtime.nodes_by_id.size());
   for (bNode *node : tree_runtime.nodes_by_id) {
-    if (node_states[node->runtime->index_in_tree].is_done) {
+    if (node_states[node->index()].is_done) {
       /* Ignore nodes that are done already. */
       continue;
     }
@@ -361,7 +368,7 @@ static void update_toposort(const bNodeTree &ntree,
   if (r_sorted_nodes.size() < tree_runtime.nodes_by_id.size()) {
     r_cycle_detected = true;
     for (bNode *node : tree_runtime.nodes_by_id) {
-      if (node_states[node->runtime->index_in_tree].is_done) {
+      if (node_states[node->index()].is_done) {
         /* Ignore nodes that are done already. */
         continue;
       }
@@ -429,6 +436,7 @@ static void ensure_topology_cache(const bNodeTree &ntree)
   bNodeTreeRuntime &tree_runtime = *ntree.runtime;
   double_checked_lock_with_task_isolation(
       tree_runtime.topology_cache_mutex, tree_runtime.topology_cache_is_dirty, [&]() {
+        update_interface_sockets(ntree);
         update_node_vector(ntree);
         update_link_vector(ntree);
         update_socket_vectors_and_owner_node(ntree);
