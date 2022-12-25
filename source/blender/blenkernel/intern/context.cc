@@ -190,7 +190,7 @@ const PointerRNA *CTX_store_ptr_lookup(const bContextStore *store,
 {
   for (auto entry = store->entries.rbegin(); entry != store->entries.rend(); ++entry) {
     if (entry->name == name) {
-      if (type && RNA_struct_is_a(entry->ptr.type, type)) {
+      if (!type || (type && RNA_struct_is_a(entry->ptr.type, type))) {
         return &entry->ptr;
       }
     }
@@ -1486,7 +1486,7 @@ AssetHandle CTX_wm_asset_handle(const bContext *C, bool *r_is_valid)
       (FileDirEntry *)CTX_data_pointer_get_type(C, "active_file", &RNA_FileSelectEntry).data;
   if (file && file->asset) {
     *r_is_valid = true;
-    AssetHandle{file};
+    return AssetHandle{file};
   }
 
   *r_is_valid = false;
