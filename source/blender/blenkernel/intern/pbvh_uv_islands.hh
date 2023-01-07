@@ -27,7 +27,7 @@
 #include "BLI_float3x3.hh"
 #include "BLI_map.hh"
 #include "BLI_math.h"
-#include "BLI_math_vec_types.hh"
+#include "BLI_math_vector_types.hh"
 #include "BLI_rect.h"
 #include "BLI_vector.hh"
 #include "BLI_vector_list.hh"
@@ -168,7 +168,7 @@ struct UVPrimitive {
   UVEdge *get_uv_edge(const float2 uv1, const float2 uv2) const;
   UVEdge *get_uv_edge(const MeshVertex *v1, const MeshVertex *v2) const;
 
-  const bool contains_uv_vertex(const UVVertex *uv_vertex) const;
+  bool contains_uv_vertex(const UVVertex *uv_vertex) const;
   const UVVertex *get_other_uv_vertex(const UVVertex *v1, const UVVertex *v2) const;
 
   UVBorder extract_border() const;
@@ -232,7 +232,7 @@ struct UVBorder {
   /**
    * Calculate the outside angle of the given vert.
    */
-  float outside_angle(const UVBorderEdge &vert) const;
+  float outside_angle(const UVBorderEdge &edge) const;
 
   void update_indexes(uint64_t border_index);
 

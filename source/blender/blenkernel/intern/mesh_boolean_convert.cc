@@ -19,7 +19,7 @@
 #include "BLI_array.hh"
 #include "BLI_float4x4.hh"
 #include "BLI_math.h"
-#include "BLI_math_vec_types.hh"
+#include "BLI_math_vector_types.hh"
 #include "BLI_mesh_boolean.hh"
 #include "BLI_mesh_intersect.hh"
 #include "BLI_span.hh"
@@ -689,7 +689,7 @@ static void merge_vertex_loop_poly_customdata_layers(Mesh *target, MeshesToIMesh
 
 static void merge_edge_customdata_layers(Mesh *target, MeshesToIMeshInfo &mim)
 {
-  for (int mesh_index = 1; mesh_index < mim.meshes.size(); ++mesh_index) {
+  for (int mesh_index = 0; mesh_index < mim.meshes.size(); ++mesh_index) {
     const Mesh *me = mim.meshes[mesh_index];
     if (me->totedge) {
       CustomData_merge(

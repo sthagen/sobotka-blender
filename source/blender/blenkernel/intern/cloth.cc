@@ -461,7 +461,7 @@ void cloth_free_modifier(ClothModifierData *clmd)
       BLI_bvhtree_free(cloth->bvhtree);
     }
 
-    if (cloth->bvhselftree) {
+    if (cloth->bvhselftree && cloth->bvhselftree != cloth->bvhtree) {
       BLI_bvhtree_free(cloth->bvhselftree);
     }
 
@@ -538,7 +538,7 @@ void cloth_free_modifier_extern(ClothModifierData *clmd)
       BLI_bvhtree_free(cloth->bvhtree);
     }
 
-    if (cloth->bvhselftree) {
+    if (cloth->bvhselftree && cloth->bvhselftree != cloth->bvhtree) {
       BLI_bvhtree_free(cloth->bvhselftree);
     }
 
@@ -820,7 +820,14 @@ static bool cloth_from_object(
   }
 
   clmd->clothObject->bvhtree = bvhtree_build_from_cloth(clmd, clmd->coll_parms->epsilon);
-  clmd->clothObject->bvhselftree = bvhtree_build_from_cloth(clmd, clmd->coll_parms->selfepsilon);
+
+  if (compare_ff(clmd->coll_parms->selfepsilon, clmd->coll_parms->epsilon, 1e-6f)) {
+    /* Share the BVH tree if the epsilon is the same. */
+    clmd->clothObject->bvhselftree = clmd->clothObject->bvhtree;
+  }
+  else {
+    clmd->clothObject->bvhselftree = bvhtree_build_from_cloth(clmd, clmd->coll_parms->selfepsilon);
+  }
 
   return true;
 }
@@ -1168,7 +1175,7 @@ static Mesh *cloth_make_rest_mesh(ClothModifierData *clmd, Mesh *mesh)
 {
   Mesh *new_mesh = BKE_mesh_copy_for_eval(mesh, false);
   ClothVertex *verts = clmd->clothObject->verts;
-  MVert *mvert = BKE_mesh_verts_for_write(mesh);
+  MVert *mvert = BKE_mesh_verts_for_write(new_mesh);
 
   /* vertex count is already ensured to match */
   for (uint i = 0; i < mesh->totvert; i++, verts++) {
@@ -1460,9 +1467,9 @@ static bool cloth_build_springs(ClothModifierData *clmd, Mesh *mesh)
   Cloth *cloth = clmd->clothObject;
   ClothSpring *spring = nullptr, *tspring = nullptr, *tspring2 = nullptr;
   uint struct_springs = 0, shear_springs = 0, bend_springs = 0, struct_springs_real = 0;
-  uint mvert_num = (uint)mesh->totvert;
+  uint mvert_num = uint(mesh->totvert);
   uint numedges = uint(mesh->totedge);
-  uint numpolys = (uint)mesh->totpoly;
+  uint numpolys = uint(mesh->totpoly);
   float shrink_factor;
   const MEdge *medge = BKE_mesh_edges(mesh);
   const MPoly *mpoly = BKE_mesh_polys(mesh);
@@ -1647,7 +1654,7 @@ static bool cloth_build_springs(ClothModifierData *clmd, Mesh *mesh)
   for (int i = 0; i < mvert_num; i++) {
     if (cloth->verts[i].spring_count > 0) {
       cloth->verts[i].avg_spring_len = cloth->verts[i].avg_spring_len * 0.49f /
-                                       (float(cloth->verts[i].spring_count));
+                                       float(cloth->verts[i].spring_count);
     }
   }
 

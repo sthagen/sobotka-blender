@@ -1604,7 +1604,7 @@ static void blo_cache_storage_entry_register(
 
 /** Restore a cache data entry from old ID into new one, when reading some undo memfile. */
 static void blo_cache_storage_entry_restore_in_new(
-    ID * /*id*/, const IDCacheKey *key, void **cache_p, uint flags, void *cache_storage_v)
+    ID *id, const IDCacheKey *key, void **cache_p, uint flags, void *cache_storage_v)
 {
   BLOCacheStorage *cache_storage = static_cast<BLOCacheStorage *>(cache_storage_v);
 
@@ -1615,6 +1615,15 @@ static void blo_cache_storage_entry_restore_in_new(
     if ((flags & IDTYPE_CACHE_CB_FLAGS_PERSISTENT) == 0) {
       *cache_p = nullptr;
     }
+    return;
+  }
+
+  /* Assume that when ID source is tagged as changed, its caches need to be cleared.
+   * NOTE: This is mainly a work-around for some IDs, like Image, which use a non-depsgraph-handled
+   * process for part of their updates.
+   */
+  if (id->recalc & ID_RECALC_SOURCE) {
+    *cache_p = nullptr;
     return;
   }
 
@@ -2026,8 +2035,10 @@ static void direct_link_id_common(
   }
 
   /* No-main and other types of special IDs should never be written in .blend files. */
-  BLI_assert((id->tag & (LIB_TAG_NO_MAIN | LIB_TAG_NO_USER_REFCOUNT | LIB_TAG_NOT_ALLOCATED)) ==
-             0);
+  /* NOTE: `NO_MAIN` is commented for now as some code paths may still generate embedded IDs with
+   * this tag, see T103389. Related to T88555. */
+  BLI_assert(
+      (id->tag & (/*LIB_TAG_NO_MAIN |*/ LIB_TAG_NO_USER_REFCOUNT | LIB_TAG_NOT_ALLOCATED)) == 0);
 
   if ((tag & LIB_TAG_TEMP_MAIN) == 0) {
     BKE_lib_libblock_session_uuid_ensure(id);
@@ -3919,6 +3930,11 @@ BlendFileData *blo_read_file_internal(FileData *fd, const char *filepath)
       BKE_lib_override_library_main_validate(bfd->main, fd->reports->reports);
       BKE_lib_override_library_main_update(bfd->main);
 
+      /* FIXME Temporary 'fix' to a problem in how temp ID are copied in
+       * `BKE_lib_override_library_main_update`, see T103062.
+       * Proper fix involves first addressing T90610. */
+      BKE_main_collections_parent_relations_rebuild(bfd->main);
+
       fd->reports->duration.lib_overrides = PIL_check_seconds_timer() -
                                             fd->reports->duration.lib_overrides;
     }
@@ -4540,6 +4556,11 @@ static void library_link_end(Main *mainl, FileData **fd, const int flag)
   BKE_main_free(main_newid);
 
   BKE_main_id_tag_all(mainvar, LIB_TAG_NEW, false);
+
+  /* FIXME Temporary 'fix' to a problem in how temp ID are copied in
+   * `BKE_lib_override_library_main_update`, see T103062.
+   * Proper fix involves first addressing T90610. */
+  BKE_main_collections_parent_relations_rebuild(mainvar);
 
   /* Make all relative paths, relative to the open blend file. */
   fix_relpaths_library(BKE_main_blendfile_path(mainvar), mainvar);

@@ -473,6 +473,9 @@ class NodeTreeMainUpdater {
       if (node_field_inferencing::update_field_inferencing(ntree)) {
         result.interface_changed = true;
       }
+      if (anonymous_attribute_inferencing::update_anonymous_attribute_relations(ntree)) {
+        result.interface_changed = true;
+      }
     }
 
     result.output_changed = this->check_if_output_changed(ntree);
@@ -523,10 +526,10 @@ class NodeTreeMainUpdater {
   {
     tree.ensure_topology_cache();
     for (bNodeSocket *socket : tree.all_sockets()) {
-      socket->flag &= ~SOCK_IN_USE;
+      socket->flag &= ~SOCK_IS_LINKED;
       for (const bNodeLink *link : socket->directly_linked_links()) {
         if (!link->is_muted()) {
-          socket->flag |= SOCK_IN_USE;
+          socket->flag |= SOCK_IS_LINKED;
           break;
         }
       }
