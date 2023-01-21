@@ -18,6 +18,7 @@
 #include "BKE_lib_id.h"
 #include "BKE_material.h"
 #include "BKE_mesh.h"
+#include "BKE_mesh_wrapper.h"
 #include "BKE_modifier.h"
 #include "BKE_object.h"
 
@@ -151,6 +152,8 @@ void USDGenericMeshWriter::write_mesh(HierarchyContext &context, Mesh *mesh)
   write_visibility(context, timecode, usd_mesh);
 
   USDMeshData usd_mesh_data;
+  /* Ensure data exists if currently in edit mode. */
+  BKE_mesh_wrapper_ensure_mdata(mesh);
   get_geometry_data(mesh, usd_mesh_data);
 
   if (usd_export_context_.export_params.use_instancing && context.is_instance()) {
@@ -400,7 +403,8 @@ void USDGenericMeshWriter::assign_materials(const HierarchyContext &context,
 void USDGenericMeshWriter::write_normals(const Mesh *mesh, pxr::UsdGeomMesh usd_mesh)
 {
   pxr::UsdTimeCode timecode = get_export_time_code();
-  const float(*lnors)[3] = static_cast<const float(*)[3]>(CustomData_get_layer(&mesh->ldata, CD_NORMAL));
+  const float(*lnors)[3] = static_cast<const float(*)[3]>(
+      CustomData_get_layer(&mesh->ldata, CD_NORMAL));
   const Span<MPoly> polys = mesh->polys();
   const Span<MLoop> loops = mesh->loops();
 

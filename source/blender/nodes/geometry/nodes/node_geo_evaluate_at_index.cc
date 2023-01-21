@@ -131,9 +131,6 @@ static void node_update(bNodeTree *ntree, bNode *node)
 
 static void node_gather_link_searches(GatherLinkSearchOpParams &params)
 {
-  const NodeDeclaration &declaration = *params.node_type().fixed_declaration;
-  search_link_ops_for_declarations(params, declaration.inputs.as_span().take_front(1));
-
   const bNodeType &node_type = params.node_type();
   const std::optional<eCustomDataType> type = node_data_type_to_custom_data_type(
       (eNodeSocketDatatype)params.other_socket().type);
@@ -143,6 +140,14 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
       node.custom2 = *type;
       params.update_and_connect_available_socket(node, "Value");
     });
+    params.add_item(
+        IFACE_("Index"),
+        [node_type, type](LinkSearchOpParams &params) {
+          bNode &node = params.add_node(node_type);
+          node.custom2 = *type;
+          params.update_and_connect_available_socket(node, "Index");
+        },
+        -1);
   }
 }
 
@@ -190,7 +195,8 @@ void register_node_type_geo_evaluate_at_index()
 
   static bNodeType ntype;
 
-  geo_node_type_base(&ntype, GEO_NODE_EVALUATE_AT_INDEX, "Evaluate at Index", NODE_CLASS_CONVERTER);
+  geo_node_type_base(
+      &ntype, GEO_NODE_EVALUATE_AT_INDEX, "Evaluate at Index", NODE_CLASS_CONVERTER);
   ntype.geometry_node_execute = file_ns::node_geo_exec;
   ntype.declare = file_ns::node_declare;
   ntype.draw_buttons = file_ns::node_layout;

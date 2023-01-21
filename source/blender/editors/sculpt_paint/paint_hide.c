@@ -77,7 +77,8 @@ static void partialvis_update_mesh(Object *ob,
   const int *vert_indices = BKE_pbvh_node_get_vert_indices(node);
   paint_mask = CustomData_get_layer(&me->vdata, CD_PAINT_MASK);
 
-  bool *hide_vert = CustomData_get_layer_named(&me->vdata, CD_PROP_BOOL, ".hide_vert");
+  bool *hide_vert = CustomData_get_layer_named_for_write(
+      &me->vdata, CD_PROP_BOOL, ".hide_vert", me->totvert);
   if (hide_vert == NULL) {
     hide_vert = CustomData_add_layer_named(
         &me->vdata, CD_PROP_BOOL, CD_SET_DEFAULT, NULL, me->totvert, ".hide_vert");
@@ -376,6 +377,8 @@ static int hide_show_exec(bContext *C, wmOperator *op)
 
   /* End undo. */
   SCULPT_undo_push_end(ob);
+
+  SCULPT_topology_islands_invalidate(ob->sculpt);
 
   /* Ensure that edges and faces get hidden as well (not used by
    * sculpt but it looks wrong when entering editmode otherwise). */

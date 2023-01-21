@@ -507,7 +507,7 @@ static float mixColors(
 
 static void scene_setSubframe(Scene *scene, float subframe)
 {
-  /* dynamic paint subframes must be done on previous frame */
+  /* Dynamic paint sub-frames must be done on previous frame. */
   scene->r.cfra -= 1;
   scene->r.subframe = subframe;
 }
@@ -922,7 +922,7 @@ static void surface_freeUnusedData(DynamicPaintSurface *surface)
     return;
   }
 
-  /* free bakedata if not active or surface is baked */
+  /* Free bake-data if not active or surface is baked. */
   if (!(surface->flags & MOD_DPAINT_ACTIVE) ||
       (surface->pointcache && surface->pointcache->flag & PTCACHE_BAKED)) {
     free_bakeData(surface->data);
@@ -1071,7 +1071,7 @@ DynamicPaintSurface *dynamicPaint_createNewSurface(DynamicPaintCanvasSettings *c
   BKE_modifier_path_init(
       surface->image_output_path, sizeof(surface->image_output_path), "cache_dynamicpaint");
 
-  /* Using ID_BRUSH i18n context, as we have no physics/dpaint one for now... */
+  /* Using ID_BRUSH i18n context, as we have no physics/dynamic-paint one for now. */
   dynamicPaintSurface_setUniqueName(surface, CTX_DATA_(BLT_I18NCONTEXT_ID_BRUSH, "Surface"));
 
   surface->effector_weights = BKE_effector_add_weights(NULL);
@@ -1139,7 +1139,7 @@ bool dynamicPaint_createType(struct DynamicPaintModifierData *pmd, int type, str
       brush->smudge_strength = 0.3f;
       brush->max_velocity = 1.0f;
 
-      /* Paint proximity falloff colorramp. */
+      /* Paint proximity falloff color-ramp. */
       {
         CBData *ramp;
 
@@ -1659,7 +1659,7 @@ static void dynamicPaint_setInitialColor(const Scene *scene, DynamicPaintSurface
   /* vertex color layer */
   else if (surface->init_color_type == MOD_DPAINT_INITIAL_VERTEXCOLOR) {
 
-    /* for vertex surface, just copy colors from mcol */
+    /* For vertex surface, just copy colors from #MLoopCol. */
     if (surface->format == MOD_DPAINT_SURFACE_F_VERTEX) {
       const MLoop *mloop = BKE_mesh_loops(mesh);
       const int totloop = mesh->totloop;
@@ -1934,8 +1934,8 @@ static Mesh *dynamicPaint_Modifier_apply(DynamicPaintModifierData *pmd, Object *
             }
 
             /* paint layer */
-            MLoopCol *mloopcol = CustomData_get_layer_named(
-                &result->ldata, CD_PROP_BYTE_COLOR, surface->output_name);
+            MLoopCol *mloopcol = CustomData_get_layer_named_for_write(
+                &result->ldata, CD_PROP_BYTE_COLOR, surface->output_name, result->totloop);
             /* if output layer is lost from a constructive modifier, re-add it */
             if (!mloopcol && dynamicPaint_outputLayerExists(surface, ob, 0)) {
               mloopcol = CustomData_add_layer_named(&result->ldata,
@@ -1947,8 +1947,8 @@ static Mesh *dynamicPaint_Modifier_apply(DynamicPaintModifierData *pmd, Object *
             }
 
             /* wet layer */
-            MLoopCol *mloopcol_wet = CustomData_get_layer_named(
-                &result->ldata, CD_PROP_BYTE_COLOR, surface->output_name2);
+            MLoopCol *mloopcol_wet = CustomData_get_layer_named_for_write(
+                &result->ldata, CD_PROP_BYTE_COLOR, surface->output_name2, result->totloop);
             /* if output layer is lost from a constructive modifier, re-add it */
             if (!mloopcol_wet && dynamicPaint_outputLayerExists(surface, ob, 1)) {
               mloopcol_wet = CustomData_add_layer_named(&result->ldata,
@@ -1978,7 +1978,8 @@ static Mesh *dynamicPaint_Modifier_apply(DynamicPaintModifierData *pmd, Object *
           /* vertex group paint */
           else if (surface->type == MOD_DPAINT_SURFACE_T_WEIGHT) {
             int defgrp_index = BKE_object_defgroup_name_index(ob, surface->output_name);
-            MDeformVert *dvert = CustomData_get_layer(&result->vdata, CD_MDEFORMVERT);
+            MDeformVert *dvert = CustomData_get_layer_for_write(
+                &result->vdata, CD_MDEFORMVERT, result->totvert);
             float *weight = (float *)sData->type_data;
 
             /* apply weights into a vertex group, if doesn't exists add a new layer */
@@ -2786,7 +2787,7 @@ int dynamicPaint_createUVSurface(Scene *scene,
                                  float *progress,
                                  bool *do_update)
 {
-  /* Antialias jitter point relative coords */
+  /* Anti-alias jitter point relative coords. */
   const int aa_samples = (surface->flags & MOD_DPAINT_ANTIALIAS) ? 5 : 1;
   char uvname[MAX_CUSTOMDATA_LAYER_NAME];
   uint32_t active_points = 0;
@@ -5066,7 +5067,7 @@ static void dynamic_paint_prepare_effect_cb(void *__restrict userdata,
 
   /* if global gravity is enabled, add it too */
   if (scene->physics_settings.flag & PHYS_GLOBAL_GRAVITY) {
-    /* also divide by 10 to about match default grav
+    /* also divide by 10 to about match default gravity
      * with default force strength (1.0). */
     madd_v3_v3fl(forc,
                  scene->physics_settings.gravity,
@@ -5138,9 +5139,9 @@ static int dynamicPaint_prepareEffectStep(struct Depsgraph *depsgraph,
   }
 
   /* Get number of required steps using average point distance
-   * so that just a few ultra close pixels won't increase substeps to max. */
+   * so that just a few ultra close pixels won't increase sub-steps to max. */
 
-  /* adjust number of required substep by fastest active effect */
+  /* Adjust number of required sub-step by fastest active effect. */
   if (surface->effect & MOD_DPAINT_EFFECT_DO_SPREAD) {
     spread_speed = surface->spread_speed;
   }
@@ -5332,7 +5333,7 @@ static void dynamic_paint_effect_drip_cb(void *__restrict userdata,
 
       const uint n_trgt = (uint)n_target[n_idx];
 
-      /* Sort of spinlock, but only for given ePoint.
+      /* Sort of spin-lock, but only for given ePoint.
        * Since the odds a same ePoint is modified at the same time by several threads is very low,
        * this is much more efficient than a global spin lock. */
       const uint epointlock_idx = n_trgt / 8;
@@ -5810,7 +5811,7 @@ static void dynamic_paint_surface_pre_step_cb(void *__restrict userdata,
 
         pPoint->state = DPAINT_PAINT_WET;
       }
-      /* in case of just dryed paint, just mix it to the dry layer and mark it empty */
+      /* In case of just dried paint, just mix it to the dry layer and mark it empty. */
       else if (pPoint->state > 0) {
         float f_color[4];
         blendColors(pPoint->color, pPoint->color[3], pPoint->e_color, pPoint->e_color[3], f_color);
