@@ -78,9 +78,9 @@ set(SRC
   intern/autoexec.c
   intern/blender.c
   intern/blender_copybuffer.c
-  intern/blender_undo.c
+  intern/blender_undo.cc
   intern/blender_user_menu.c
-  intern/blendfile.c
+  intern/blendfile.cc
   intern/blendfile_link_append.c
   intern/boids.c
   intern/bpath.c
@@ -89,7 +89,7 @@ set(SRC
   intern/cachefile.c
   intern/callbacks.c
   intern/camera.c
-  intern/cdderivedmesh.c
+  intern/cdderivedmesh.cc
   intern/cloth.cc
   intern/collection.c
   intern/collision.c
@@ -119,9 +119,9 @@ set(SRC
   intern/customdata.cc
   intern/customdata_file.c
   intern/data_transfer.cc
-  intern/deform.c
+  intern/deform.cc
   intern/displist.cc
-  intern/dynamicpaint.c
+  intern/dynamicpaint.cc
   intern/editlattice.c
   intern/editmesh.cc
   intern/editmesh_bvh.c
@@ -131,7 +131,7 @@ set(SRC
   intern/fcurve.c
   intern/fcurve_cache.c
   intern/fcurve_driver.c
-  intern/fluid.c
+  intern/fluid.cc
   intern/fmodifier.c
   intern/freestyle.c
   intern/geometry_component_curves.cc
@@ -249,7 +249,7 @@ set(SRC
   intern/particle_distribute.c
   intern/particle_system.c
   intern/pbvh.c
-  intern/pbvh.cc
+  intern/pbvh_colors.cc
   intern/pbvh_bmesh.c
   intern/pbvh_pixels.cc
   intern/pbvh_uv_islands.cc
@@ -296,7 +296,7 @@ set(SRC
   intern/tracking_stabilize.c
   intern/tracking_util.c
   intern/type_conversions.cc
-  intern/undo_system.c
+  intern/undo_system.cc
   intern/unit.c
   intern/vfont.c
   intern/vfontdata_freetype.c
